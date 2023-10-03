@@ -312,7 +312,7 @@ if __name__ == "__main__":
         help="whether to visualize the call graph",
     )
     args = parser.parse_args()
-    visualize = args.visualize
+    visualize = int(args.visualize)
     code_dir = args.codedir
     json_tag = args.jsontag
 
