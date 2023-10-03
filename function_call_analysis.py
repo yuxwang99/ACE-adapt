@@ -270,6 +270,15 @@ def call_analysis(
 def save_cnt_map(root_node: FunctionCall, json_map: dict):
     json_key = root_node.func_name
     json_value = {}
+
+    json_value["child_nodes"] = []
+    for child_func in root_node.child_nodes:
+        json_value["child_nodes"].append(child_func.func_name)
+
+    json_value["parent_nodes"] = []
+    for parent_func in root_node.parent_nodes:
+        json_value["parent_nodes"].append(parent_func.func_name)
+
     json_value["input"] = root_node.input_vars
     json_value["output"] = root_node.output_vars
     json_value["cnt_vars_parents"] = root_node.cnt_vars_parents
