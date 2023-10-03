@@ -124,13 +124,12 @@ def traverse_call_graph_var(
         traverse_call_graph_var(child, graph, back_trace, sub, cnt_child, cnt_parent)
 
 
-def call_graph_viz(root_node, graph_name="call_graph", via_var=False):
+def call_graph_viz(root_node, graph_name="call_graph", via_var=False, back_prop=False):
     # Create a new Digraph object
     graph = Digraph(comment=graph_name)
     if via_var:
-        traverse_call_graph_var(root_node, graph, False)
+        traverse_call_graph_var(root_node, graph, back_prop)
     else:
         traverse_call_graph(root_node, graph)
     graph.save(graph_name + ".dot")
-
-    return
+    graph.view()

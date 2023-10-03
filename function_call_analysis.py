@@ -284,28 +284,6 @@ def save_cnt_map(root_node: FunctionCall, json_map: dict):
     return json_map
 
 
-# import json
-
-# demo = False
-# json_tag = "./function_attributes.json"
-# if demo:
-#     json_tag = "./exp_script/demo_attributes.json"
-# # Open the JSON file for reading
-# with open(json_tag, "r") as file:
-#     tag_data = json.load(file)
-# if demo:
-#     a = call_analysis("./exp_script/demo2.m", tag_data)
-# else:
-#     a = call_analysis("../src_paper/src/my_Extract_features_Jep.m", tag_data)
-# call_graph_viz(a, "test", True)
-# json_file = save_cnt_map(a, {})
-# if demo:
-#     save_dir = "./exp_script/function_call_pattern.json"
-# else:
-#     save_dir = "./function_call_pattern.json"
-# with open("./function_call_pattern.json", "w") as outfile:
-#     json.dump(json_file, outfile, indent=4)
-
 if __name__ == "__main__":
     import argparse
     import os
@@ -318,7 +296,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--jsontag", required=True, help="Path to the function feature file"
     )
+    parser.add_argument(
+        "--visualize",
+        required=False,
+        default=0,
+        help="whether to visualize the call graph",
+    )
     args = parser.parse_args()
+    visualize = args.visualize
     code_dir = args.codedir
     json_tag = args.jsontag
 
@@ -329,7 +314,13 @@ if __name__ == "__main__":
     if code_dir.endswith(".m"):
         print("\nprocessing file: ", code_dir)
         root_node = call_analysis(code_dir, tag_data)
-        call_graph_viz(root_node, "test1", True)
+        if visualize > 0:
+            if visualize == 1:
+                call_graph_viz(root_node, "test1", False, False)
+            if visualize == 2:
+                call_graph_viz(root_node, "test2", True, False)
+            else:
+                call_graph_viz(root_node, "test3", True, True)
         json_file = save_cnt_map(root_node, {})
         with open("./function_call_pattern.json", "w") as outfile:
             json.dump(json_file, outfile, indent=4)
