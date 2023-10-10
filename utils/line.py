@@ -54,6 +54,46 @@ def get_line(file: str):
     return line, remainder
 
 
+def skip_line(line: str, cur_state):
+    """
+    Skip the line processed if it is comment or continuity line(processed after complete)
+    state 0: normal line
+    state 1: comment line
+    state 2: paragraph comment start
+    state 3: paragraph comment end
+    state 4: continuity line
+    """
+    # check if it is comment
+    if cur_state == 1:
+        if line.strip().endswith("%}"):
+            return 2
+        return 1
+
+    if line.strip().startswith("%{"):
+        return 1
+
+    if line.strip().startswith("%"):
+        return 3
+
+    # check if is unfinished line
+    if line.strip().endswith("..."):
+        return 4
+
+    return 0
+
+
+def merge_line(line: str, pre_lines: list, indent: str):
+    """
+    Merge the end line with the previous line
+    """
+    # process the complete line
+    pre_line = indent
+    for pre in pre_lines:
+        pre_line = pre_line + pre.strip(". ") + " "
+    line = pre_line + line.strip()
+    return line
+
+
 # parse the first code line and the rest of the file
 def parse_line(file: str):
     content = ""
