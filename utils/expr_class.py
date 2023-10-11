@@ -1,6 +1,8 @@
+# - expr_class.py - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+# - Provide class declaration for AST - - - - - - - - - - - - - - - - - - - - - - - - - #
 class ExprAST:
     """
-    Base class to parse the expression
+    Base class to parse the expression.
     """
 
     def __init__(self, content=None) -> None:
@@ -9,6 +11,9 @@ class ExprAST:
 
     def __error__(self, msg: str):
         raise ValueError(msg)
+
+    def get_content(self):
+        return self._content
 
     def is_empty(self):
         return self._content == None
@@ -19,18 +24,18 @@ class ExprAST:
 
 class BlockAST:
     """
-    Class to represent the block
+    Class to represent the block.
     """
 
     def __init__(self, body: list = []):
         self.type = None
         self.body = body
 
-        # init empty variable list
-        self.variable_list = []
-
     def add_body(self, body: ExprAST):
         self.body.append(body)
+
+    def set_variable_list(self, variable_list: list):
+        self.variable_list = variable_list
 
     def is_empty(self):
         return len(self.body) == 0
@@ -38,7 +43,7 @@ class BlockAST:
 
 class NumberExprAST(ExprAST):
     """
-    Class to represent a numeric constant
+    Class to represent a numeric constant.
     """
 
     def __init__(self, value: str):
@@ -49,7 +54,7 @@ class NumberExprAST(ExprAST):
 
 class BoolExprAST(ExprAST):
     """
-    Class to represent a boolean constant
+    Class to represent a boolean constant.
     """
 
     def __init__(self, value: str):
@@ -60,7 +65,7 @@ class BoolExprAST(ExprAST):
 
 class VariableExprAST(ExprAST):
     """
-    Class to represent a variable
+    Class to represent a variable.
     """
 
     def __init__(
@@ -79,14 +84,15 @@ class VariableExprAST(ExprAST):
         if not production.is_empty():
             self.production[slice] = self.child_AST(production)
         self.usage = []
-        # add the attributes to record the variable usage including internal(0), input(1), and output(2)
+        # add the attributes to record the variable usage including internal(0),
+        # input(1), and output(2)
         self._varAttr = varAttr
         # set super class content
         self._content = var_name
 
     def child_AST(self, expr: ExprAST, slice: ExprAST = ExprAST()):
         """
-        AST where the variable is produced
+        AST where the variable is produced.
         """
         self.production[slice] = expr
 
@@ -95,9 +101,9 @@ class VariableExprAST(ExprAST):
         if expr not in self.usage:
             self.usage.append(expr)
 
-    def parent_AST(self, expr: ExprAST):
+    def mark_parent_AST(self, expr: ExprAST):
         """
-        AST where the variable is used
+        AST where the variable is used.
         """
         if isinstance(expr, list):
             for e in expr:
@@ -107,7 +113,7 @@ class VariableExprAST(ExprAST):
 
     def set_block(self, block: BlockAST):
         """
-        Set the block where the variable is used
+        Set the block where the variable is used.
         """
         self.block = block
         if isinstance(block, IfExprAST):
@@ -115,14 +121,14 @@ class VariableExprAST(ExprAST):
 
     def get_block(self):
         """
-        Get the block where the variable is used
+        Get the block where the variable is used.
         """
         return self.block
 
 
 class StringExprAST(ExprAST):
     """
-    Class to represent a string constant
+    Class to represent a string constant.
     """
 
     def __init__(self, value: str):
@@ -133,12 +139,12 @@ class StringExprAST(ExprAST):
 
 class SliceExprAST(VariableExprAST):
     """
-    Class to represent a slice of a variable
+    Class to represent a slice of a variable.
     """
 
     def __init__(self, var: VariableExprAST, slice: StringExprAST):
         notation = var.notation + ":" + str(len(var.usage) + 1)
-        super().__init__(var.var_name, notation, var._varAttr)
+        super().__init__(var.var_name, notation)
         self.var = var
         self.slice = slice
         self._content = var.var_name + "(" + slice.value + ")"
@@ -150,7 +156,7 @@ class SliceExprAST(VariableExprAST):
 
 class BinaryExprAST(ExprAST):
     """
-    Class to represent a binary operator
+    Class to represent a binary operator.
     """
 
     def __init__(self, op: str, left_op: ExprAST, right_op: ExprAST):
@@ -158,12 +164,12 @@ class BinaryExprAST(ExprAST):
         self.op = op
         self.left_op = left_op
         self.right_op = right_op
-        self._content = left_op._content + op + right_op._content
+        self._content = left_op.get_content() + op + right_op.get_content()
 
 
 class CallExprAST(ExprAST):
     """
-    Class to represent a function call
+    Class to represent a function call.
     """
 
     def __init__(self, func_name: str, args: list = []):
@@ -174,9 +180,15 @@ class CallExprAST(ExprAST):
 
     def __content__(self):
         self._content = (
-            self.func_name + "(" + ",".join([arg._content for arg in self.args]) + ")"
+            self.func_name
+            + "("
+            + ",".join([arg.get_content() for arg in self.args])
+            + ")"
         )
         return self._content
+
+    def get_content(self):
+        return self.__content__()
 
     def is_empty(self):
         self.__content__()
@@ -185,7 +197,7 @@ class CallExprAST(ExprAST):
 
 class PrototypeAST:
     """
-    Class to represent the function prototype
+    Class to represent the function prototype.
     """
 
     def __init__(self, func_name: str, args: list = []):
@@ -218,7 +230,7 @@ class FunctionAST(BlockAST):
 
 class ForLoopAST(BlockAST):
     """
-    Class to represent the for loop
+    Class to represent the for loop.
     """
 
     def __init__(
@@ -234,7 +246,7 @@ class ForLoopAST(BlockAST):
 
     def set_block(self, block: BlockAST):
         """
-        Set the block where the variable is used
+        Set the block where the variable is used.
         """
         self.block = block
 
@@ -244,7 +256,7 @@ class ForLoopAST(BlockAST):
 
 class WhileLoopAST(BlockAST):
     """
-    Class to represent the while loop
+    Class to represent the while loop.
     """
 
     def __init__(self, cond: ExprAST, body: ExprAST):
@@ -254,14 +266,14 @@ class WhileLoopAST(BlockAST):
 
     def set_block(self, block: BlockAST):
         """
-        Set the block where the variable is used
+        Set the block where the variable is used.
         """
         self.block = block
 
 
 class IfExprAST(BlockAST):
     """
-    Class to represent the if expression
+    Class to represent the if expression.
     """
 
     def __init__(

@@ -1,6 +1,9 @@
+# - var_usage_analysis.py - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+# - Parse the Matlab code and generate the variable usage table to analyze its - - - - -#
 import re
 from function_tag import get_function_attributes
 from utils.line import (
+    remove_cmt_in_line,
     remove_empty_space_before_line,
     skip_line,
     merge_line,
@@ -11,6 +14,7 @@ from utils.parse_expr import (
     parse_CallExprAST,
     parse_ForLoopAST,
     parse_IfExprAST,
+    generate_new_var,
 )
 
 from utils.expr_class import BlockAST, ExprAST
@@ -20,7 +24,8 @@ def parse_primary_expr(
     expr: str, variable_list=[], table_vars: dict = {}, cur_block: BlockAST = None
 ):
     """
-    Parse the primary expression including the control clause, function call, binary expression, etc.
+    Parse the primary expression including the control clause, function call, binary
+    expression, etc.
     """
     # if it is empty, return empty expression
     expr = expr.strip("; ")
@@ -46,25 +51,26 @@ def parse_primary_expr(
     attr = get_function_attributes(expr, definition=False)
     if attr:
         # table vars record the variables in the current scope
-        # if not found, regard it as a function call
-        if attr[0] not in table_vars:
-            return parse_CallExprAST(attr, variable_list, table_vars, cur_block)
-        else:
+        if attr[0] in table_vars:
+            # if found, regard it as a slice
             assert len(attr[2]) == 1, "Slice should only produce one variable"
+        else:
+            # if not found, regard it as a function call
+            return parse_CallExprAST(attr, variable_list, table_vars, cur_block)
 
     # parse binary expression by default
     # RE split "=" for assignment but not split "==", ">=" , "<=" and "~="
     result = re.split(r"(?<=[^<>=~])=(?![<>=~])", expr)
+
     # If it is a statement without "=", return empty expression to notate no assignment
     if len(result) < 2:
         return ExprAST(expr), variable_list, table_vars
     lhs_content, rhs_content = result[0], result[1]
     rhs = parse_base_expr(rhs_content, table_vars)
     lhs = parse_base_expr(lhs_content, table_vars, len(variable_list))
-    lhs.child_AST(rhs)
-    lhs.set_block(cur_block)
+    lhs, table_vars = generate_new_var(lhs, table_vars, cur_block, rhs)
     variable_list.append(lhs)
-    table_vars[lhs_content] = lhs
+    table_vars[lhs.var_name] = lhs
 
     return lhs, variable_list, table_vars
 
@@ -107,15 +113,13 @@ def analyze_var_usage(
         empty_chars = " " * n_empty
 
         # process the complete line
-        pre_lines = [code_line[i] for i in cond_line_ind]
-        line = merge_line(line, pre_lines, empty_chars)
+        pre_lines = [remove_cmt_in_line(code_line[i]) for i in cond_line_ind]
+        line = merge_line(remove_cmt_in_line(line), pre_lines, empty_chars)
 
         cur_block = AST_nodes[-1] if len(AST_nodes) else None
 
         if line.strip() == "end":
-            # TODO: write the variable list to the block
             AST_nodes.pop()
-            # TODO: use variable list of the parent node
             continue
 
         AST, variable_list, table_vars = parse_primary_expr(
@@ -125,8 +129,6 @@ def analyze_var_usage(
         if cur_block:
             # Attach the expression to its belonging block
             cur_block.add_body(AST)
-            # if isinstance(cur_block, IfExprAST):
-
         else:
             # If no parent node, add to top_expr
             top_expr.append(AST)
@@ -136,9 +138,9 @@ def analyze_var_usage(
         if isinstance(AST, BlockAST):
             # save current variable list to the block
             AST_nodes.append(AST)
-    # return
+    return variable_list, top_expr
 
 
-analyze_var_usage("../src_paper/src/my_Extract_features_Jep.m")
+var_list, expr_list = analyze_var_usage("../src_paper/src/my_Extract_features_Jep.m")
 if __name__ == "main":
     pass

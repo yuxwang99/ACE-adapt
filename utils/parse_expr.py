@@ -1,3 +1,5 @@
+# - parse_expr.py - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+# - Provide support functions that parse the matlab expression into AST - - - - - - - - #
 from utils.expr_class import *
 
 # Matlab operators
@@ -39,14 +41,16 @@ def is_numeric(s):
         return False
 
 
-# tag the rhs to the input variables
 def parse_rhs_args_list(var_names: list, table_vars: dict):
     """
-    Parse the rhs variable list to the input variables based on the variable table that provide information of existed variables.
-    The rhs args can be variable or slice of variable in the table_vars, as well as nested expression of constant and function call.
+    Parse the rhs variable list to the input variables based on the variable table that
+    provide information of existed variables.
+    The rhs args can be variable or slice of variable in the table_vars, as well as
+    nested expression of constant and function call.
 
     Args:
-        var_names ([var1, var2, ...]): list of variable names (string) that need to be parsed
+        var_names ([var1, var2, ...]): list of variable names (string) that need to be
+        parsed
         table_vars (str : VariableExprAST): dict of variable names : variable AST
 
     Returns:
@@ -65,12 +69,14 @@ def parse_rhs_args_list(var_names: list, table_vars: dict):
 
 def parse_base_expr(expr: str, table_vars={}, var_notation=0):
     """
-    Parse the AST composed of the base expression, including the numeric constant, variable, string which can be are composed of the binary expression, function call, etc.
+    Parse the AST composed of the base expression, including the numeric constant,
+    variable, string which can be are composed of the binary expression, function call,
+    etc.
 
     Args:
         expr (str): input string that need to be parsed
         table_vars (dict, optional): Table of variable of current scope. Defaults to {}.
-        var_notation (int, optional): notation for possible new parsed variable. Defaults to 0.
+        var_notation (int, optional): notation for new parsed variable. Defaults to 0.
 
     Raises:
         ValueError: if the expression cannot be parsed according to Matlab syntax
@@ -100,7 +106,8 @@ def parse_base_expr(expr: str, table_vars={}, var_notation=0):
 
 def parse_paren_expr(expr: str, table_vars={}):
     """
-    Parse the expression enclosed in the parentheses, including the function call and slice expression.
+    Parse the expression enclosed in the parentheses, including the function call and
+    slice expression.
 
     Args:
         expr (str): input string that need to be parsed
@@ -112,7 +119,8 @@ def parse_paren_expr(expr: str, table_vars={}):
     ind_open_paren = expr.find("(")
     ind_close_paren = expr.rfind(")")
     if expr[:ind_open_paren] in table_vars:
-        # if it is a variable, regard it as a slice of the existed variable unconditionally
+        # if it is a variable, regard it as a slice of the existed variable
+        # unconditionally
         var_in_use = table_vars[expr[:ind_open_paren]]
         return SliceExprAST(
             var_in_use, StringExprAST(expr[ind_open_paren + 1 : ind_close_paren])
@@ -126,38 +134,52 @@ def parse_paren_expr(expr: str, table_vars={}):
         if isinstance(type, VariableExprAST):
             type = table_vars[type.var_name]
             # TODO: check effect
-            type.parent_AST(function_call)
+            type.mark_parent_AST(function_call)
         function_call.args.append(type)
     return function_call
 
 
-# The binary expression is only considered appeared in rhs
 def parse_binary_expr(expr: str, table_vars={}):
     """
-    Parse the math computation into binary expression, including the binary operator, struct operator, etc.
+    Parse the math computation into binary expression, including the binary operator,
+    struct operator, etc.
 
     Args:
-        expr (str): _description_
-        table_vars (dict, optional): _description_. Defaults to {}.
+        expr (str): input string that need to be parsed
+        table_vars (dict, optional): Table of variable of current scope. Defaults to {}.
 
     Raises:
-        ValueError: _description_
+        ValueError: if the expression cannot be parsed according to Matlab syntax rules
+        for binary expression
 
     Returns:
-        _type_: _description_
+        _BinaryExprAST_: the returned top level expression is a binary expression AST
     """
+    # The binary expression is only considered appeared in rhs
     cur_token = ""
     for [ind, ch] in enumerate(expr):
+        if (cur_token + ch).isidentifier():
+            cur_token += ch
+            continue
+
+        if is_numeric(cur_token + ch):
+            cur_token += ch
+            continue
+        # handle the negative sign
+        if ch == "-" and cur_token == "" and is_numeric(ch + expr[ind + 1]):
+            cur_token += ch
+            continue
+
         if (ch in binary_operator) or (expr[ind : ind + 2] in binary_operator):
             left_op = parse_base_expr(cur_token, table_vars)
             if isinstance(left_op, VariableExprAST):
                 left_op = table_vars[left_op.var_name]
             # first consider combined operators like .*
             if expr[ind : ind + 2] in binary_operator:
-                right_op = parse_base_expr(expr[len(cur_token) + 2 :], table_vars)
-                op = expr[len(cur_token) : len(cur_token) + 2]
+                right_op = parse_base_expr(expr[ind + 2 :], table_vars)
+                op = expr[ind : ind + 2]
             else:
-                right_op = parse_base_expr(expr[len(cur_token) + 1 :], table_vars)
+                right_op = parse_base_expr(expr[ind + 1 :], table_vars)
                 op = ch
 
             if isinstance(right_op, VariableExprAST):
@@ -170,18 +192,12 @@ def parse_binary_expr(expr: str, table_vars={}):
 
             # Append the usage to the variable
             if isinstance(left_op, VariableExprAST):
-                left_op.parent_AST(final_expr)
+                left_op.mark_parent_AST(final_expr)
             if isinstance(right_op, VariableExprAST):
-                right_op.parent_AST(final_expr)
+                right_op.mark_parent_AST(final_expr)
 
             return final_expr
 
-        if (cur_token + ch).isidentifier():
-            cur_token += ch
-            continue
-        if (cur_token + ch).isnumeric():
-            cur_token += ch
-            continue
     raise ValueError(f"Cannot parse the binary expression '{expr}'")
 
 
@@ -206,12 +222,6 @@ def parse_FunctionAST(
         table_vars[var] = input_var
         variable_list.append(input_var)
 
-    # lhs -> variable, create the variables the output from its production
-    # for var in attr[2]:
-    #     output_var = VariableExprAST(var, "#" + str(len(variable_list)))
-    #     table_vars[var] = output_var
-    #     variable_list.append(output_var)
-    #     output_var.set_block(function_def)
     return function_def, variable_list, table_vars
 
 
@@ -233,8 +243,45 @@ def map_variable(var: VariableExprAST, table_vars: dict):
         return table_vars[var.var_name]
     elif isinstance(var, SliceExprAST):
         if var.var.var_name not in table_vars:
-            var.__error__(f"The variable '{var.var_name}' is not defined.")
+            var.__error__(f"The variable '{var.var.var_name}' is not defined.")
         return table_vars[var.var.var_name]
+
+
+def generate_new_var(
+    var_expr: VariableExprAST,
+    table_vars: dict,
+    cur_block: BlockAST,
+    generate_expr: ExprAST,
+):
+    """
+    Generate the new variable that connect to its parent and child AST on the lhs, and
+    update the variable table.
+
+    Args:
+        var_expr (VariableExprAST): base variable expression.
+        table_vars (dict): dict of variable names : variable AST.
+        cur_block (BlockAST): current block the AST is attached to.
+        generate_expr (ExprAST): production expression that the variable is used.
+
+    Returns:
+        var_expr (VariableExprAST): valid variable expression.
+        table_vars (dict): updated dict.
+    """
+    if isinstance(var_expr, SliceExprAST):
+        # mark the slice produced variable as the parent of the variable
+        var_expr.var = map_variable(var_expr.var, table_vars)
+        var_expr.var.mark_parent_AST(var_expr)
+        var_expr.revert_content_var()
+
+        var_expr.set_block(cur_block)
+        var_expr.child_AST(generate_expr, slice=var_expr.slice)
+        table_vars[var_expr.var_name] = var_expr
+    else:
+        var_expr.set_block(cur_block)
+        var_expr.child_AST(generate_expr, slice=ExprAST())
+        table_vars[var_expr.var_name] = var_expr
+
+    return var_expr, table_vars
 
 
 def parse_CallExprAST(
@@ -254,36 +301,21 @@ def parse_CallExprAST(
         if var == "~":
             continue
         output_var = parse_base_expr(var, table_vars, str(len(variable_list)))
-        if isinstance(output_var, SliceExprAST):
-            # mark the slice produced variable as the parent of the
-            # variable
-            output_var.var = map_variable(output_var.var, table_vars)
-            output_var.var.parent_AST(output_var)
-            output_var.revert_content_var()
-
-            output_var.set_block(cur_block)
-            output_var.child_AST(function_call, slice=output_var.slice)
+        if isinstance(output_var, VariableExprAST):
+            output_var, table_vars = generate_new_var(
+                output_var, table_vars, cur_block, function_call
+            )
             out_var_list.append(output_var)
             variable_list.append(output_var)
-            table_vars[output_var.var_name] = output_var
-        elif isinstance(output_var, VariableExprAST):
-            output_var.set_block(cur_block)
-            output_var.child_AST(
-                function_call, slice=ExprAST()
-            )  # no slice for function call
-
-            out_var_list.append(output_var)
-            variable_list.append(output_var)
-            table_vars[var] = output_var
         else:
             raise ValueError(f"Cannot parse the output variable '{var}'.")
 
     # connect the produced lhs vars to the rhs variables' usage
     for var in rhs_args:
         if isinstance(var, VariableExprAST):
-            var.parent_AST(function_call)
+            var.mark_parent_AST(function_call)
         elif isinstance(var, SliceExprAST):
-            var.var.parent_AST(function_call)
+            var.var.mark_parent_AST(function_call)
 
     # parse the rhs to the production
     return function_call, variable_list, table_vars

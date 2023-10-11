@@ -1,7 +1,19 @@
+# - line.py - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+# - Provide support functions when parse a line - - - - - - - - - - - - - - - - - - - - #
 import re
 
 
 def remove_empty_space_before_line(line: str):
+    """
+    Remove the empty space before the line.
+
+    Args:
+        line (str): input line string.
+
+    Returns:
+        line (str): the rest of the line string.
+        ind (int): the number of empty space removed before the line.
+    """
     ind = 0
     while ind < len(line):
         if line[ind] == " ":
@@ -11,8 +23,17 @@ def remove_empty_space_before_line(line: str):
     return line[ind::], ind
 
 
-# remove the comments followed by the line
 def remove_cmt_in_line(line: str, ind=0):
+    """
+    Remove the comments followed by the line.
+
+    Args:
+        line (str): the input line string.
+        ind (int, optional): the start index to parse. Defaults to 0.
+
+    Returns:
+        line (str): output line string without comments start by % from ind.
+    """
     while ind < len(line):
         if line[ind] == "%":
             line = line[:ind]
@@ -24,7 +45,15 @@ def remove_cmt_in_line(line: str, ind=0):
 
 
 def remove_cmt_paragraph(content):
-    # Use regular expressions to remove comments enclosed in %{ and }%
+    """
+    Use regular expressions to remove comments enclosed in %{ and }%.
+
+    Args:
+        content (str): input string.
+
+    Returns:
+        content (str): string withou comments.
+    """
     pattern = r"%\{[\s\S]*?%\}"
     content = re.sub(pattern, "", content)
     return content
@@ -42,8 +71,17 @@ def split_left_right(line: str):
     return left_expr.strip(), right_expr.strip()
 
 
-# get the content of the line and the rest of the file
 def get_line(file: str):
+    """
+    Get the content of the line and the rest of the file.
+
+    Args:
+        file (str): complete code file.
+
+    Returns:
+        line (str): the first line of the file.
+        remainder (str): the rest of the file.
+    """
     if "\n" not in file:
         return file, ""
 
@@ -56,12 +94,12 @@ def get_line(file: str):
 
 def skip_line(line: str, cur_state):
     """
-    Skip the line processed if it is comment or continuity line(processed after complete)
-    state 0: normal line
-    state 1: comment line
-    state 2: paragraph comment start
-    state 3: paragraph comment end
-    state 4: continuity line
+    Skip the line processed if it is comment or continuity line(processed after complete).
+    state 0: normal line;
+    state 1: comment line;
+    state 2: paragraph comment start;
+    state 3: paragraph comment end;
+    state 4: continuity line.
     """
     # check if it is comment
     if cur_state == 1:
@@ -84,7 +122,7 @@ def skip_line(line: str, cur_state):
 
 def merge_line(line: str, pre_lines: list, indent: str):
     """
-    Merge the end line with the previous line
+    Merge the end line with the previous line.
     """
     # process the complete line
     pre_line = indent
@@ -96,6 +134,17 @@ def merge_line(line: str, pre_lines: list, indent: str):
 
 # parse the first code line and the rest of the file
 def parse_line(file: str):
+    """
+    Parse the first code line and the rest of the file.
+
+    Args:
+        file (str): complete code file.
+
+    Returns:
+        line (str): the first code line of the file, the line is followed by the rest
+        lines until it is unfinished.
+        remainder (str): the rest of the file.
+    """
     content = ""
 
     # ignore the comments
