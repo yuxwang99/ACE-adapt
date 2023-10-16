@@ -6,7 +6,7 @@ class ExprAST:
     """
 
     def __init__(self, content=None) -> None:
-        self._content = content
+        self._content = ""
         self._attr = {}
 
     def __error__(self, msg: str):
@@ -16,7 +16,7 @@ class ExprAST:
         return self._content
 
     def is_empty(self):
-        return self._content == None
+        return len(self._content) == 0
 
     def mark_attr(self, key, value):
         self._attr[key] = value
@@ -52,17 +52,6 @@ class NumberExprAST(ExprAST):
         self._content = value
 
 
-class BoolExprAST(ExprAST):
-    """
-    Class to represent a boolean constant.
-    """
-
-    def __init__(self, value: str):
-        super().__init__()
-        self.value = value
-        self._content = value
-
-
 class VariableExprAST(ExprAST):
     """
     Class to represent a variable.
@@ -79,6 +68,8 @@ class VariableExprAST(ExprAST):
         super().__init__()
 
         self.var_name = var_name
+        if not isinstance(notation, str):
+            raise ValueError("The notation should be a string.")
         self.notation = notation
         self.production = {}
         if not production.is_empty():
@@ -118,6 +109,8 @@ class VariableExprAST(ExprAST):
         self.block = block
         if isinstance(block, IfExprAST):
             self.mark_attr("cond", block.cond_ind)
+        if isinstance(block, SwitchExprAST):
+            self.mark_attr("switch", block.case[-1].get_content())
 
     def get_block(self):
         """
@@ -131,10 +124,64 @@ class StringExprAST(ExprAST):
     Class to represent a string constant.
     """
 
-    def __init__(self, value: str):
+    def __init__(self, value):
+        super().__init__()
+        str_value = ""
+        if isinstance(value, list):
+            for v in value:
+                if isinstance(v, str):
+                    str_value += v
+                elif isinstance(v, ExprAST):
+                    str_value += v.get_content()
+                else:
+                    raise ValueError("The value should be a string or ExprAST.")
+        self.value = str_value
+        self._content = str_value
+
+
+class ConcatExprAST(ExprAST):
+    """
+    Class to represent the concatenate expression in "[]".
+    """
+
+    def __init__(self, value=[]):
         super().__init__()
         self.value = value
         self._content = value
+        self.args = []
+
+    def get_content(self):
+        str_content = ""
+        for c in self._content:
+            if isinstance(c, ExprAST):
+                str_content += ", " + c.get_content()
+            else:
+                str_content += ", " + c
+        return "[" + str_content + "]"
+
+    def set_block(self, block: BlockAST):
+        """
+        Set the block where the variable is used.
+        """
+        self.block = block
+        if isinstance(block, IfExprAST):
+            self.mark_attr("cond", block.cond_ind)
+
+
+class CellExprAST(VariableExprAST):
+    """
+    Class to represent a boolean constant.
+    """
+
+    def __init__(
+        self,
+        var_name: str,
+        notation: str = "#0",
+        varAttr: int = 0,
+        slice: ExprAST = ExprAST(),
+        production: ExprAST = ExprAST(),
+    ):
+        super().__init__(var_name, notation, varAttr, slice, production)
 
 
 class SliceExprAST(VariableExprAST):
@@ -164,6 +211,7 @@ class BinaryExprAST(ExprAST):
         self.op = op
         self.left_op = left_op
         self.right_op = right_op
+
         self._content = left_op.get_content() + op + right_op.get_content()
 
 
@@ -238,8 +286,11 @@ class ForLoopAST(BlockAST):
     ):
         super().__init__(body)
         self.var = var
-        self.start = start
-        self.end = end
+        if start == end:
+            self.range = start
+        else:
+            self.start = start
+            self.end = end
         self._content = (
             "for " + var.var_name + "=" + start._content + ":" + end._content
         )
@@ -300,31 +351,23 @@ class IfExprAST(BlockAST):
         """
         self.block = block
 
-    # def add_elseif(self, cond: ExprAST, then_content: ExprAST = ExprAST()):
-    #     self.cond.append(cond)
-    #     if self.cond_ind > 0:
-    #         self.cond_ind += 1
-    #     else:
-    #         raise ValueError("The elseif expression should be after if expression.")
-    #     if not then_content.is_empty():
-    #         self.body.append(then_content)
 
-    # def add_else(self, else_content: ExprAST = ExprAST()):
-    #     self.cond_ind = -1
-    #     else_expr = ExprAST("else")
-    #     self.body.append(else_expr)
-    #     if not else_content.is_empty():
-    #         self.body.append(else_content)
+class SwitchExprAST(BlockAST):
+    """
+    Class to represent the if expression.
+    """
 
-    # def add_then(self, then: ExprAST):
-    #     if self.then.is_empty():
-    #         self.then = then
-    #     else:
-    #         self.__error__("The then expression is already defined.")
+    def __init__(
+        self,
+        var: ExprAST,
+        case: list = [],
+    ):
+        super().__init__()
+        self.var = var
+        self.case = case
 
-    # def add_else(self, else_: ExprAST):
-    #     self.else_ = else_
-    #     if self.else_.is_empty():
-    #         self.else_ = else_
-    #     else:
-    #         self.__error__("The else expression is already defined.")
+    def set_block(self, block: BlockAST):
+        """
+        Set the block where the variable is used
+        """
+        self.block = block

@@ -1,8 +1,12 @@
+# - function_call_analysis.py - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+# - Parse the Matlab code and analyze the sub-function call pattern - - - - - - - - - - #
 from parse import parse
 import os
 from utils.line import generate_valid_code_line, split_left_right
 from utils.visualization import call_graph_viz
 from function_tag import remove_cmt_paragraph, parse_list, get_function_attributes
+from var_usage_analysis import analyze_var_usage
+from save_vars_matlab import select_top_level_used_vars
 
 
 class FunctionCall:
@@ -80,7 +84,6 @@ def is_function_call(line: str) -> bool:
     if expr[-1] == ";":
         expr = expr[:-1]
 
-    # TODO: fix the control flow
     if (
         expr.startswith("if")
         or expr.startswith("while")
@@ -188,9 +191,6 @@ def get_call_pattern(line: str):
 
     nested_attrs = []
 
-    # TODO: get_function_attributes fully implemented to
-    # differ the function calling and variable slice assignment
-
     # handle the top most function call
     # first get the output variable names from the left expression
     output_var_names = parse_list(left_expr)
@@ -213,9 +213,16 @@ def get_call_pattern(line: str):
     return nested_attrs, top_level_output
 
 
+def function_called(func_name: str, callee: list) -> None:
+    for func in callee:
+        if func.func_name == func_name:
+            return func
+
+
 def call_analysis(
     func_dir: str,
     function_attributes: dict,
+    func_list=[],
     parent_func=None,
     input_var_callnames=[],
     output_var_callnames=[],
@@ -238,7 +245,12 @@ def call_analysis(
     if filename[:-2] in function_attributes.keys():
         input_vars = function_attributes[filename[:-2]]["input"]
         output_vars = function_attributes[filename[:-2]]["output"]
-    function = FunctionCall(filename[:-2], input_vars, output_vars)
+
+    function = function_called(filename[:-2], func_list)
+    if function is None:
+        function = FunctionCall(filename[:-2], input_vars, output_vars)
+        func_list.append(function)
+
     if parent_func is not None:
         parent_func.add_child_node(function, input_var_callnames, input_vars)
         function.add_parent_node(
@@ -258,6 +270,7 @@ def call_analysis(
                 call_analysis(
                     os.path.join(root_dir, sub_func + ".m"),
                     function_attributes,
+                    func_list,
                     parent_func=function,
                     input_var_callnames=input_var_names,
                     output_var_callnames=left_expr,
@@ -265,6 +278,28 @@ def call_analysis(
                 )
 
     return function
+
+
+def once_call_analysis(
+    file_dir: str,
+    call_pattern: dict,
+    once_call_list=[],
+):
+    var_list, expr_list = analyze_var_usage(file_dir)
+    save_var_list = select_top_level_used_vars(
+        var_list, top_block=expr_list[0], call_pattern=call_pattern
+    )
+    for var in save_var_list:
+        for slice, production in var.production.items():
+            call_func = production.func_name
+            once_call_list.append(call_func)
+            if call_func in call_pattern.keys():
+                once_call_analysis(
+                    os.path.join(os.path.dirname(file_dir), call_func + ".m"),
+                    call_pattern,
+                    once_call_list,
+                )
+    return once_call_list
 
 
 def save_cnt_map(root_node: FunctionCall, json_map: dict):
@@ -326,7 +361,7 @@ if __name__ == "__main__":
         if visualize > 0:
             if visualize == 1:
                 call_graph_viz(root_node, "test1", False, False)
-            if visualize == 2:
+            elif visualize == 2:
                 call_graph_viz(root_node, "test2", True, False)
             else:
                 call_graph_viz(root_node, "test3", True, True)

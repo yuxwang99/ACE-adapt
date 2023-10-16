@@ -3,6 +3,7 @@ import warnings
 from utils.line import (
     generate_valid_code_line,
     remove_cmt_paragraph,
+    remove_cmt_in_line,
 )
 
 
@@ -17,7 +18,10 @@ def get_valid_identifier(word: str):
 
 # parse a string split by comma and return the elements
 def parse_list(list_str: str):
-    list_str = list_str.strip("{}[] ")
+    list_str = list_str.strip("; ")
+    list_str = remove_cmt_in_line(list_str)
+    while list_str.startswith("{") or list_str.startswith("["):
+        list_str = list_str[1:-1]
 
     # Initialize variables
     elements = []
@@ -62,6 +66,8 @@ def get_function_attributes(expr: str, definition=False) -> None:
         r = r1 if r1 is not None else r2
     if r is not None:
         func_name = get_valid_identifier(r.named["func_name"])
+        if not func_name.isidentifier():
+            return None
 
         tmp_input_vars = r.named["input"]
         if tmp_input_vars.isidentifier():

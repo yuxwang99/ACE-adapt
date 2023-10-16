@@ -102,6 +102,7 @@ def skip_line(line: str, cur_state):
     state 4: continuity line.
     """
     # check if it is comment
+
     if cur_state == 1:
         if line.strip().endswith("%}"):
             return 2
@@ -114,7 +115,8 @@ def skip_line(line: str, cur_state):
         return 3
 
     # check if is unfinished line
-    if line.strip().endswith("..."):
+    line = remove_cmt_in_line(line)
+    if line.strip().endswith("...") or line.strip().endswith("{"):
         return 4
 
     return 0
