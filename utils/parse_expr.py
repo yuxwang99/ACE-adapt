@@ -569,6 +569,14 @@ def parse_ForLoopAST(
     return loop_for_block, variable_list, table_vars
 
 
+def parse_WhileLoopAST(
+    expr: str, variable_list=[], table_vars: dict = {}, cur_block: BlockAST = None
+):
+    loop_cond = parse_base_expr(expr.split("while")[1], table_vars)
+    loop_expr = WhileLoopAST(loop_cond, [])
+    return loop_expr, variable_list, table_vars
+
+
 def parse_IfExprAST(
     expr: str, variable_list=[], table_vars: dict = {}, cur_block: BlockAST = None
 ):

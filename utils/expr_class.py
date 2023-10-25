@@ -310,7 +310,7 @@ class WhileLoopAST(BlockAST):
     Class to represent the while loop.
     """
 
-    def __init__(self, cond: ExprAST, body: ExprAST):
+    def __init__(self, cond: ExprAST, body=[]):
         super().__init__()
         self.cond = cond
         self.body = body

@@ -26,16 +26,16 @@ def parse_list(list_str: str):
     # Initialize variables
     elements = []
     current_element = ""
-    inside_brackets = 0
+    brackets = []
 
     # Iterate through the input string character by character
     for char in list_str:
-        if char == "(":
-            inside_brackets += 1
+        if char == "(" or char == "[" or char == "{":
+            brackets.append(char)
         elif char == ")":
-            inside_brackets -= 1
+            brackets.pop()
 
-        if char == "," and inside_brackets == 0:
+        if char == "," and len(brackets) == 0:
             # Found a comma outside of brackets, consider it as a separator
             elements.append(current_element.strip())
             current_element = ""
