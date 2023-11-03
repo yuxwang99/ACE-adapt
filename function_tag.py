@@ -87,7 +87,7 @@ def get_function_attributes(expr: str, definition=False) -> None:
         return func_name, input_vars, output_vars
 
 
-def tag_func(func_dir: str):
+def tag_func(func_dir: str, prefix=""):
     try:
         with open(func_dir, "r") as file:
             # Read the contents of the file
@@ -105,6 +105,8 @@ def tag_func(func_dir: str):
         attrs = get_function_attributes(line, definition=True)
         if attrs is not None:
             func_name, input_vars, output_vars = attrs
+            if prefix != "":
+                func_name = prefix + "/" + func_name
             return func_name, input_vars, output_vars
 
     return None, None, None
@@ -117,9 +119,17 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--codedir", required=True, help="Path to the code directory")
+    parser.add_argument(
+        "--subdir", required=False, action="append", help="Path to the code directory"
+    )
+    parser.add_argument(
+        "--outdir", required=True, help="Path to store the output json analysis file"
+    )
     args = parser.parse_args()
 
     code_dir = args.codedir
+    subdir = args.subdir
+    out_dir = args.outdir
 
     function_attributes = {}
     for file_dir in os.listdir(code_dir):
@@ -134,5 +144,18 @@ if __name__ == "__main__":
             function_attributes = {**function_attributes, **func_attr}
             print("done =====\n")
 
-    with open("./function_attributes.json", "w") as outfile:
+    for sub_folder in subdir:
+        for file_dir in os.listdir(os.path.join(code_dir, sub_folder)):
+            if file_dir.endswith(".m"):
+                print("processing file in subfolder: ", sub_folder + "/" + file_dir)
+                func_name, input_vars, output_vars = tag_func(
+                    os.path.join(code_dir, sub_folder, file_dir), prefix=sub_folder
+                )
+                if func_name is None:
+                    continue
+                func_attr = {func_name: {"input": input_vars, "output": output_vars}}
+                function_attributes = {**function_attributes, **func_attr}
+                print("done =====\n")
+
+    with open(out_dir, "w") as outfile:
         json.dump(function_attributes, outfile, indent=4)

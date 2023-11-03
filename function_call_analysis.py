@@ -2,11 +2,14 @@
 # - Parse the Matlab code and analyze the sub-function call pattern - - - - - - - - - - #
 from parse import parse
 import os
+import re
 from utils.line import generate_valid_code_line, split_left_right
 from utils.visualization import call_graph_viz
 from function_tag import remove_cmt_paragraph, parse_list, get_function_attributes
 from var_usage_analysis import analyze_var_usage
+from utils.parse_expr import parse_base_expr
 from save_vars_matlab import select_top_level_used_vars
+from utils.expr_class import CallExprAST
 
 
 class FunctionCall:
@@ -257,25 +260,45 @@ def call_analysis(
             parent_func, output_vars, output_var_callnames, top_output
         )
 
+    ind = 0
     for line in generate_valid_code_line(file_contents):
         # skip the function definition
         if line.strip().startswith("function"):
             continue
-        call_patern, top_output = get_call_pattern(line)
-        for attr in call_patern:
-            sub_func = attr[0]
-            left_expr = attr[2]
-            input_var_names = attr[1]
-            if sub_func in function_attributes.keys():
-                call_analysis(
-                    os.path.join(root_dir, sub_func + ".m"),
-                    function_attributes,
-                    func_list,
-                    parent_func=function,
-                    input_var_callnames=input_var_names,
-                    output_var_callnames=left_expr,
-                    top_output=top_output,
-                )
+        result = re.split(r"(?<=[^<>=~])=(?![<>=~])", line)
+
+        # If it is a statement without "=", return empty expression to notate no assignment
+        if len(result) < 2:
+            continue
+        rhs_content = result[1]
+        try:
+            rhs_AST = parse_base_expr(rhs_content)
+            if isinstance(rhs_AST, CallExprAST):
+                if (
+                    rhs_AST.func_name in function_attributes.keys()
+                    or "Feature_scripts/" + rhs_AST.func_name
+                    in function_attributes.keys()
+                ):
+                    pass
+
+        except:
+            continue
+
+        # call_patern, top_output = get_call_pattern(line)
+        # for attr in call_patern:
+        #     sub_func = attr[0]
+        #     left_expr = attr[2]
+        #     input_var_names = attr[1]
+        #     if sub_func in function_attributes.keys():
+        #         call_analysis(
+        #             os.path.join(root_dir, sub_func + ".m"),
+        #             function_attributes,
+        #             func_list,
+        #             parent_func=function,
+        #             input_var_callnames=input_var_names,
+        #             output_var_callnames=left_expr,
+        #             top_output=top_output,
+        # )
 
     return function
 
@@ -333,23 +356,27 @@ if __name__ == "__main__":
     import os
     import json
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--codedir", required=True, help="Path to the analyze code directory"
-    )
-    parser.add_argument(
-        "--jsontag", required=True, help="Path to the function feature file"
-    )
-    parser.add_argument(
-        "--visualize",
-        required=False,
-        default=0,
-        help="whether to visualize the call graph",
-    )
-    args = parser.parse_args()
-    visualize = int(args.visualize)
-    code_dir = args.codedir
-    json_tag = args.jsontag
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument(
+    #     "--codedir", required=True, help="Path to the analyze code directory"
+    # )
+    # parser.add_argument(
+    #     "--jsontag", required=True, help="Path to the function feature file"
+    # )
+    # parser.add_argument(
+    #     "--visualize",
+    #     required=False,
+    #     default=0,
+    #     help="whether to visualize the call graph",
+    # )
+    # args = parser.parse_args()
+    # visualize = int(args.visualize)
+    # code_dir = args.codedir
+    # json_tag = args.jsontag
+
+    code_dir = "/Users/yuxuan/Projects/23 fall/PassageOfTimeDataAnalysis/Pipeline_Yuxuan/extractFeat_Yuxuan.m"
+    json_tag = "./PoT_tag.json"
+    visualize = 1
 
     # Open the JSON file for reading
     with open(json_tag, "r") as file:
