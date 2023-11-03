@@ -5,17 +5,23 @@ import os
 import re
 from utils.line import generate_valid_code_line, split_left_right
 from utils.visualization import call_graph_viz
-from function_tag import remove_cmt_paragraph, parse_list, get_function_attributes
-from var_usage_analysis import analyze_var_usage
-from utils.parse_expr import parse_base_expr
-from save_vars_matlab import select_top_level_used_vars
+from utils.parse_expr import parse_nested_expr
 from utils.expr_class import CallExprAST
+from function_tag import (
+    remove_cmt_paragraph,
+    parse_list,
+    get_function_attributes,
+)
+from var_usage_analysis import analyze_var_usage
+
+from save_vars_matlab import select_top_level_used_vars
 
 
 class FunctionCall:
     """
     FunctionCall implements a function node that includes the function name,
-    input variables, output variables, and the connection to the parent and child nodes.
+    input variables, output variables, and the connection to the parent and
+    child nodes.
     """
 
     def __init__(self, func_name, input_vars=[], output_vars=[]):
@@ -34,7 +40,8 @@ class FunctionCall:
         Args:
             child_func: the child node
             local_vars: internal variables
-            child_var_names: variable names w.r.t the child node in the same order as local_vars
+            child_var_names: variable names w.r.t the child node in the same
+            order as local_vars
         """
         self.child_nodes.append(child_func)
         if len(local_vars) > len(child_var_names):
@@ -56,8 +63,10 @@ class FunctionCall:
         Connect the parent node to the current node
         Args:
             parent_func: the parent node local_vars: internal variables
-            parent_var_names: variable names w.r.t the parent node in the same order as local_vars
-            top_output: the top level output variable names as the parent var names when the call pattern is nested
+            parent_var_names: variable names w.r.t the parent node in the same
+            order as local_vars
+            top_output: the top level output variable names as the parent var
+            names when the call pattern is nested
         """
         self.parent_nodes.append(parent_func)
         if len(parent_var_names) > len(self.output_vars):
@@ -99,7 +108,7 @@ def is_function_call(line: str) -> bool:
     r2 = parse("{func_name}({input})", expr)
     r = r1 if r1 is not None else r2
     if r is not None:
-        func_name = r.named["func_name"].strip()
+        func_name = r.named["func_name"].strip()  # type: ignore
         return func_name.isidentifier()
 
     return False
@@ -197,7 +206,9 @@ def get_call_pattern(line: str):
     # handle the top most function call
     # first get the output variable names from the left expression
     output_var_names = parse_list(left_expr)
-    attr = get_function_attributes(compose_nested_function_call(final_expr, call_map))
+    attr = get_function_attributes(
+        compose_nested_function_call(final_expr, call_map)
+    )
     func_name = attr[0] if attr is not None else ""
 
     # handle the nested function calls
@@ -267,22 +278,34 @@ def call_analysis(
             continue
         result = re.split(r"(?<=[^<>=~])=(?![<>=~])", line)
 
-        # If it is a statement without "=", return empty expression to notate no assignment
+        # If it is a statement without "=", return empty expression to notate
+        # no assignment
         if len(result) < 2:
             continue
         rhs_content = result[1]
-        try:
-            rhs_AST = parse_base_expr(rhs_content)
-            if isinstance(rhs_AST, CallExprAST):
+
+        paren_ind = line.find("(")
+
+        if paren_ind != -1:
+            rhs_ast = parse_nested_expr(rhs_content)
+            if isinstance(rhs_ast, CallExprAST):
                 if (
-                    rhs_AST.func_name in function_attributes.keys()
-                    or "Feature_scripts/" + rhs_AST.func_name
+                    rhs_ast.func_name in function_attributes.keys()
                     in function_attributes.keys()
                 ):
-                    pass
-
-        except:
-            continue
+                    sub_call_flag = True
+                    
+                elif ( "Feature_scripts/" + rhs_ast.func_name in function_attributes.keys())
+                    sub_call_flag = True
+                call_analysis(
+                    os.path.join(root_dir, sub_func + ".m"),
+                    function_attributes,
+                    func_list,
+                    parent_func=function,
+                    input_var_callnames=input_var_names,
+                    output_var_callnames=left_expr,
+                    top_output=top_output,
+                )
 
         # call_patern, top_output = get_call_pattern(line)
         # for attr in call_patern:
@@ -310,8 +333,9 @@ def once_call_analysis(
 ):
     var_list, expr_list = analyze_var_usage(file_dir)
     save_var_list = select_top_level_used_vars(
-        var_list, top_block=expr_list[0], call_pattern=call_pattern
+        var_list, top_block=expr_list[0], valid_save_func=call_pattern
     )
+
     for var in save_var_list:
         for slice, production in var.production.items():
             call_func = production.func_name
@@ -374,8 +398,8 @@ if __name__ == "__main__":
     # code_dir = args.codedir
     # json_tag = args.jsontag
 
-    code_dir = "/Users/yuxuan/Projects/23 fall/PassageOfTimeDataAnalysis/Pipeline_Yuxuan/extractFeat_Yuxuan.m"
-    json_tag = "./PoT_tag.json"
+    code_dir = "/home/yuxwang/Projects/PassageOfTimeDataAnalysis/Pipeline_Yuxuan/extractFeat_Yuxuan.m"
+    json_tag = "./tag_PoT.json"
     visualize = 1
 
     # Open the JSON file for reading
