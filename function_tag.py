@@ -59,7 +59,6 @@ def get_function_attributes(expr: str, definition=False) -> None:
     if definition:
         r = parse("function {output}={func_name}({input})", expr)
     else:
-        # TODO: manually parse w.r.t the rules
         # get function attributes when call it
         r1 = parse("{output}={func_name}({input})", expr)
         r2 = parse("{func_name}({input})", expr)

@@ -7,6 +7,7 @@ class ExprAST:
 
     def __init__(self, content=None) -> None:
         self._content = ""
+        self.in_loop = False
         self._attr = {}
 
     def __error__(self, msg: str):
@@ -30,6 +31,7 @@ class BlockAST:
     def __init__(self, body: list = []):
         self.type = None
         self.body = body
+        self._is_loop = False
 
     def add_body(self, body: ExprAST):
         self.body.append(body)
@@ -107,10 +109,13 @@ class VariableExprAST(ExprAST):
         Set the block where the variable is used.
         """
         self.block = block
+        self.in_loop = block._is_loop
         if isinstance(block, IfExprAST):
             self.mark_attr("cond", block.cond_ind)
         if isinstance(block, SwitchExprAST):
             self.mark_attr("switch", block.case[-1].get_content())
+        if isinstance(block, TryExprAST):
+            self.mark_attr("catch", block.catch)
 
     def get_block(self):
         """
@@ -266,6 +271,7 @@ class FunctionAST(BlockAST):
     def __init__(self, proto: PrototypeAST):
         super().__init__()
         self.proto = proto
+        self.type = "function"
         self._content = proto.func_name
         # body initialized to be empty
         self.body = []
@@ -286,6 +292,7 @@ class ForLoopAST(BlockAST):
     ):
         super().__init__(body)
         self.var = var
+        self.type = "for"
         if start == end:
             self.range = start
         else:
@@ -294,6 +301,7 @@ class ForLoopAST(BlockAST):
         self._content = (
             "for " + var.var_name + "=" + start._content + ":" + end._content
         )
+        self._is_loop = True
 
     def set_block(self, block: BlockAST):
         """
@@ -312,8 +320,10 @@ class WhileLoopAST(BlockAST):
 
     def __init__(self, cond: ExprAST, body=[]):
         super().__init__()
+        self.type = "while"
         self.cond = cond
         self.body = body
+        self._is_loop = True
 
     def set_block(self, block: BlockAST):
         """
@@ -334,6 +344,7 @@ class IfExprAST(BlockAST):
         else_body: ExprAST = ExprAST(),
     ):
         super().__init__()
+        self.type = "if"
         self.cond = [cond]
         if isinstance(content, list):
             self.body = content
@@ -347,9 +358,34 @@ class IfExprAST(BlockAST):
 
     def set_block(self, block: BlockAST):
         """
-        Set the block where the variable is used
+        Set the block where the block belongs to.
         """
         self.block = block
+        self._is_loop = block._is_loop
+
+
+class TryExprAST(BlockAST):
+    """
+    Class to represent the try expression.
+    """
+
+    def __init__(self, content: ExprAST = ExprAST()):
+        super().__init__()
+        if isinstance(content, list):
+            self.body = content
+        elif not content.is_empty():
+            self.body = [content]
+        else:
+            self.body = []
+
+        self.catch = 0
+
+    def set_block(self, block: BlockAST):
+        """
+        Set the block where the block belongs to.
+        """
+        self.block = block
+        self._is_loop = block._is_loop
 
 
 class SwitchExprAST(BlockAST):
@@ -363,6 +399,7 @@ class SwitchExprAST(BlockAST):
         case: list = [],
     ):
         super().__init__()
+        self.type = "switch"
         self.var = var
         self.case = case
 
@@ -371,3 +408,4 @@ class SwitchExprAST(BlockAST):
         Set the block where the variable is used
         """
         self.block = block
+        self._is_loop = block._is_loop
