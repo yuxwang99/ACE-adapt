@@ -39,6 +39,9 @@ operators = operator + binary_operator
 
 
 def is_numeric(s):
+    # exclude the special case of NAN
+    if s.upper() == "NAN":
+        return False
     if s.isnumeric():
         return True
     try:
@@ -87,7 +90,7 @@ def parse_rhs_args_list(var_names: list, table_vars: dict):
     return var_list
 
 
-def parse_base_expr(expr: str, table_vars={}, var_notation=0):
+def parse_base_expr(expr: str, table_vars={}, var_notation=0, lhs=False):
     """
     Parse the AST composed of the base expression, including the numeric constant,
     variable, string which can be are composed of the binary expression, function call,
@@ -97,6 +100,7 @@ def parse_base_expr(expr: str, table_vars={}, var_notation=0):
         expr (str): input string that need to be parsed
         table_vars (dict, optional): Table of variable of current scope. Defaults to {}.
         var_notation (int, optional): notation for new parsed variable. Defaults to 0.
+        lhs(bool, optional): whether the expression is in the lhs. Defaults to False.
 
     Raises:
         ValueError: if the expression cannot be parsed according to Matlab syntax
@@ -123,15 +127,15 @@ def parse_base_expr(expr: str, table_vars={}, var_notation=0):
     squ_par_ind = expr.find("[")
     curly_par_ind = expr.find("{")
     if paren_ind != -1 or squ_par_ind != -1 or curly_par_ind != -1:
-        return parse_nested_expr(expr, table_vars, var_notation)
+        return parse_nested_expr(expr, table_vars, var_notation, lhs)
 
     if any(op in expr for op in operators):
-        return parse_basic_computation(expr, table_vars)
+        return parse_basic_computation(expr, table_vars, lhs)
 
     raise ValueError(f"Cannot parse the expression '{expr}'")
 
 
-def parse_basic_computation(expr: str, table_vars={}):
+def parse_basic_computation(expr: str, table_vars={}, lhs=False):
     """
     Parse the math computation into binary expression, including the binary operator,
     struct operator, etc.
@@ -164,15 +168,19 @@ def parse_basic_computation(expr: str, table_vars={}):
             continue
 
         if (ch in operators) or (expr[ind : ind + 2] in binary_operator):
-            left_op = parse_base_expr(cur_token, table_vars)
+            left_op = parse_base_expr(cur_token, table_vars, lhs)
             if isinstance(left_op, VariableExprAST):
-                left_op = table_vars[left_op.var_name]
+                if ch != ".":  # struct operator
+                    left_op = table_vars[left_op.var_name]
+                else:  # normal binary operator
+                    left_op.notation = left_op.var_name
+
             # first consider combined operators like .*
             if expr[ind : ind + 2] in operators:
-                right_op = parse_base_expr(expr[ind + 2 :], table_vars)
+                right_op = parse_base_expr(expr[ind + 2 :], table_vars, lhs)
                 op = expr[ind : ind + 2]
             else:
-                right_op = parse_base_expr(expr[ind + 1 :], table_vars)
+                right_op = parse_base_expr(expr[ind + 1 :], table_vars, lhs)
                 op = ch
 
             if isinstance(right_op, VariableExprAST):
@@ -232,7 +240,7 @@ def parse_concat_expr(expr: str, table_vars={}):
         raise ValueError(f"Cannot parse the concatenation expression '{expr}'.")
 
 
-def parse_nested_expr(nest_expr: str, table_vars={}, var_notation=0):
+def parse_nested_expr(nest_expr: str, table_vars={}, var_notation=0, lhs=False):
     expr_stack = []
 
     pre_word = ""
@@ -273,7 +281,7 @@ def parse_nested_expr(nest_expr: str, table_vars={}, var_notation=0):
                 expr = expr_stack[pos_bracket[-1] :] + [cur_paren_type[1]]
                 # parse the non-nested expression
                 expr_AST = parse_paren_expr(
-                    expr, table_vars, cur_paren_type, var_notation
+                    expr, table_vars, cur_paren_type, var_notation, lhs
                 )
                 expr_AST.append(cur_paren_type)
 
@@ -289,6 +297,7 @@ def parse_nested_expr(nest_expr: str, table_vars={}, var_notation=0):
         # determine whether is string
         if char == '"' or (
             char == "'"
+            and len(expr_stack) > 0
             and (
                 (isinstance(expr_stack[-1], str) and expr_stack[-1] not in table_vars)
                 or (isinstance(expr_stack[-1], ExprAST))
@@ -300,11 +309,11 @@ def parse_nested_expr(nest_expr: str, table_vars={}, var_notation=0):
     if pre_word != ")" and pre_word != "}" and pre_word != "]" and pre_word != ";":
         expr_stack.append(pre_word)
 
-    final_call = get_args_from_lexical(expr_stack, table_vars)
+    final_call = get_args_from_lexical(expr_stack, table_vars, lhs=lhs)
     return final_call[0]
 
 
-def get_args_from_lexical(lex_list: list, table_vars={}, var_list=[]):
+def get_args_from_lexical(lex_list: list, table_vars={}, var_list=[], lhs=False):
     """
     Get the arguments from the lexical list which is the list of string that consists of
     basic expression, e.g. identifier, number, etc. or expression AST.
@@ -342,7 +351,10 @@ def get_args_from_lexical(lex_list: list, table_vars={}, var_list=[]):
         elif isinstance(lex, str) and (lex in binary_operator):
             # combine the binary operation to the latter argument
             arg = parse_binary_expr(
-                args[-1], lex, get_args_from_lexical(lex_list[ind + 1])[0], table_vars
+                args[-1],
+                lex,
+                get_args_from_lexical(lex_list[ind + 1 : ind + 2])[0],
+                table_vars,
             )
             args.pop()
             args.append(arg)
@@ -362,11 +374,19 @@ def get_args_from_lexical(lex_list: list, table_vars={}, var_list=[]):
             last_arg = args[-1]
             lex, paren_type = lex[:-1], lex[-1]
 
-            if last_arg in table_vars:
+            if lhs or last_arg in table_vars:
                 slicer = ""
                 for ind in range(len(lex)):
                     slicer += lex[ind].get_content()
-                slice_expr = SliceExprAST(table_vars[last_arg], StringExprAST(slicer))
+
+                if lhs:
+                    slice_expr = SliceExprAST(
+                        VariableExprAST(last_arg), StringExprAST(slicer)
+                    )
+                else:
+                    slice_expr = SliceExprAST(
+                        table_vars[last_arg], StringExprAST(slicer)
+                    )
                 args.pop()
                 args.append(slice_expr)
             elif isinstance(last_arg, str) and last_arg.isidentifier():
@@ -387,7 +407,9 @@ def get_args_from_lexical(lex_list: list, table_vars={}, var_list=[]):
     return args
 
 
-def parse_paren_expr(expr: str, table_vars={}, paren_type="()", var_notation=0):
+def parse_paren_expr(
+    expr: str, table_vars={}, paren_type="()", var_notation=0, lhs=False
+):
     """
     Parse the expression enclosed in the parentheses, including the function call and
     slice expression.
@@ -414,7 +436,9 @@ def parse_paren_expr(expr: str, table_vars={}, paren_type="()", var_notation=0):
     for arg in args:
         type = parse_base_expr(arg, table_vars)
         if isinstance(type, VariableExprAST):
-            type = map_variable(type, table_vars)
+            if not lhs:
+                # if in the rhs, map to the existed variable
+                type = map_variable(type, table_vars)
         args_expr.append(type)
     return args_expr
 
@@ -471,6 +495,7 @@ def generate_new_var(
     table_vars: dict,
     cur_block: BlockAST,
     generate_expr: ExprAST,
+    notation: str = "",
 ):
     """
     Generate the new variable that connect to its parent and child AST on the lhs, and
@@ -487,6 +512,8 @@ def generate_new_var(
         table_vars (dict): updated dict.
     """
     if isinstance(var_expr, SliceExprAST):
+        if notation != "":
+            var_expr.notation = notation
         # mark the slice produced variable as the parent of the variable
         if var_expr.var in table_vars:
             var_expr.var = map_variable(var_expr.var, table_vars)
@@ -497,6 +524,8 @@ def generate_new_var(
         var_expr.child_AST(generate_expr, slice=var_expr.slice)
         table_vars[var_expr.var_name] = var_expr
     else:
+        if notation != "":
+            var_expr.notation = notation
         var_expr.set_block(cur_block)
         var_expr.child_AST(generate_expr, slice=ExprAST())
         table_vars[var_expr.var_name] = var_expr
@@ -590,6 +619,7 @@ def parse_IfExprAST(
         if_expr.set_block(cur_block)
         return if_expr, variable_list, table_vars
     elif expr.startswith("elseif"):
+        cur_block.cond_ind += 1
         cond = parse_base_expr(expr.split("elseif")[1], table_vars)
         cond.mark_attr("elseif", 1)
         return cond, variable_list, table_vars
@@ -598,6 +628,22 @@ def parse_IfExprAST(
         else_expr.mark_attr("else", 1)
 
         return else_expr, variable_list, table_vars
+
+
+def parse_TryExprAST(
+    expr: str, variable_list=[], table_vars: dict = {}, cur_block: BlockAST = None
+):
+    """
+    Parse the control clause in try-catch expression
+    """
+    expr = expr.strip()
+    if expr.startswith("try"):
+        try_expr = TryExprAST()
+        try_expr.set_block(cur_block)
+        return try_expr, variable_list, table_vars
+    elif expr.startswith("catch"):
+        cur_block.catch = 1
+        return ExprAST("catch"), variable_list, table_vars
 
 
 def parse_SwitchExprAST(

@@ -12,7 +12,7 @@ from utils.parse_expr import (
     map_variable,
     parse_base_expr,
     parse_FunctionAST,
-    parse_CallExprAST,
+    parse_TryExprAST,
     parse_ForLoopAST,
     parse_WhileLoopAST,
     parse_IfExprAST,
@@ -26,7 +26,25 @@ from utils.expr_class import (
     VariableExprAST,
     ConcatExprAST,
     BinaryExprAST,
+    CallExprAST,
 )
+
+
+def initialize_var_table(reserve_word: list[str]):
+    var_dict = {}
+    var_list = []
+    if isinstance(reserve_word, list):
+        for ind, var in enumerate(reserve_word):
+            var_dict[var] = VariableExprAST(
+                var, "#" + str(ind), varAttr=1, production=ExprAST()
+            )
+            var_list.append(var_dict[var])
+    else:
+        var_dict[reserve_word] = VariableExprAST(
+            reserve_word, "#0", varAttr=1, production=ExprAST()
+        )
+        var_list.append(var_dict[reserve_word])
+    return var_dict, var_list
 
 
 def parse_primary_expr(
@@ -34,7 +52,7 @@ def parse_primary_expr(
     line_ind: int,
     variable_list=[],
     table_vars: dict = {},
-    cur_block: BlockAST = None,
+    cur_block: BlockAST = BlockAST(),
 ):
     """
     Parse the primary expression including the control clause, function call, binary
@@ -66,18 +84,9 @@ def parse_primary_expr(
     if expr.startswith("if") or expr.startswith("elseif") or expr.startswith("else"):
         return parse_IfExprAST(expr, variable_list, table_vars, cur_block)
 
-    # whether function call or slice
-    # attr = get_function_attributes(expr, definition=False)
-    # if attr:
-    #     # table vars record the variables in the current scope
-    #     if attr[0] in table_vars:
-    #         # if found, regard it as a slice
-    #         assert len(attr[2]) == 1, "Slice should only produce one variable"
-    #     else:
-    #         # if not found, regard it as a function call
-    #         return parse_CallExprAST(
-    #             attr, line_ind, variable_list, table_vars, cur_block
-    #         )
+    # whether try expression
+    if expr.startswith("try") or expr.startswith("catch"):
+        return parse_TryExprAST(expr, variable_list, table_vars, cur_block)
 
     # parse binary expression by default
     # RE split "=" for assignment but not split "==", ">=" , "<=" and "~="
@@ -87,8 +96,8 @@ def parse_primary_expr(
     if len(result) < 2:
         return ExprAST(expr), variable_list, table_vars
     lhs_content, rhs_content = result[0], result[1]
-    rhs = parse_base_expr(rhs_content, table_vars)
-    lhs = parse_base_expr(lhs_content, table_vars, len(variable_list))
+    rhs = parse_base_expr(rhs_content, table_vars, lhs=False)
+    lhs = parse_base_expr(lhs_content, table_vars, len(variable_list), lhs=True)
 
     if isinstance(lhs, ConcatExprAST):
         # if lhs is a list of variables, add them to the variable list
@@ -96,7 +105,7 @@ def parse_primary_expr(
             if not isinstance(var, VariableExprAST):
                 continue
             var, table_vars = generate_new_var(
-                var, line_ind, table_vars, cur_block, rhs
+                var, line_ind, table_vars, cur_block, rhs, "#" + str(len(variable_list))
             )
             table_vars[var.var_name] = var
             variable_list.append(var)
@@ -104,16 +113,29 @@ def parse_primary_expr(
         # if lhs is a struct, the parser return it as a binary expression
         # the left operation is the struct name, the right operation is the field name
         var = lhs.left_op
-        var, table_vars = generate_new_var(var, line_ind, table_vars, cur_block, rhs)
+        var, table_vars = generate_new_var(
+            var, line_ind, table_vars, cur_block, rhs, "#" + str(len(variable_list))
+        )
         table_vars[var.var_name] = var
         variable_list.append(var)
     else:
-        lhs, table_vars = generate_new_var(lhs, line_ind, table_vars, cur_block, rhs)
+        lhs, table_vars = generate_new_var(
+            lhs, line_ind, table_vars, cur_block, rhs, "#" + str(len(variable_list))
+        )
         table_vars[lhs.var_name] = lhs
         variable_list.append(lhs)
-    rhs = map_variable(rhs, table_vars)
+
     if isinstance(rhs, VariableExprAST):
+        rhs = map_variable(rhs, table_vars)
         rhs.mark_parent_AST(lhs)
+
+    if isinstance(rhs, CallExprAST) or isinstance(rhs, ConcatExprAST):
+        # mark args as parent AST
+        # TODO: recursively track the parent AST until it reaches the variable
+        for arg in rhs.args:
+            if isinstance(arg, VariableExprAST):
+                arg = map_variable(arg, table_vars)
+                arg.mark_parent_AST(lhs)
 
     return lhs, variable_list, table_vars
 
@@ -129,8 +151,6 @@ def analyze_var_usage(
     except FileNotFoundError:
         raise ValueError(f"The file '{func_dir}' was not found.")
 
-    variable_list = []
-
     code_line = file_contents.split("\n")
     line_state = -1
     cond_line_ind = []
@@ -140,7 +160,7 @@ def analyze_var_usage(
     top_expr = []
 
     # create variable tables to record the variable usage
-    table_vars = {}
+    table_vars, variable_list = initialize_var_table(["nargin", "pi"])
     for [ind, line] in enumerate(code_line):
         # skip the comment line
         line_state = skip_line(line, line_state)
@@ -158,7 +178,7 @@ def analyze_var_usage(
         line = merge_line(remove_cmt_in_line(line), pre_lines, empty_chars)
         cond_line_ind = []
 
-        cur_block = AST_nodes[-1] if len(AST_nodes) else None
+        cur_block = AST_nodes[-1] if len(AST_nodes) else BlockAST()
 
         if line.strip() == "end":
             top_node = AST_nodes[-1]
@@ -171,13 +191,13 @@ def analyze_var_usage(
                 table_vars = {}
             continue
 
-        if ind == 76:
+        if ind == 9:
             pass
         AST, variable_list, table_vars = parse_primary_expr(
             line, ind, variable_list, table_vars, cur_block
         )
 
-        if cur_block:
+        if cur_block.type:
             # Attach the expression to its belonging block
             cur_block.add_body(AST)
         else:
@@ -197,9 +217,9 @@ def analyze_var_usage(
     return top_var_list, top_expr
 
 
-var_list, expr_list = analyze_var_usage(
-    "../src_paper/src/pan_tompkin_algorithm_segmented.m"
-)
+# var_list, expr_list = analyze_var_usage(
+#     "../src_paper/src/pan_tompkin_algorithm_segmented.m"
+# )
 if __name__ == "__main__":
     import os
 
