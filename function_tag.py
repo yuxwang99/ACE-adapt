@@ -7,8 +7,8 @@ from utils.line import (
 )
 
 
+# Remove leading and trailing whitespace
 def get_valid_identifier(word: str):
-    # Remove leading and trailing whitespace
     strpped_word = word.strip()
     if strpped_word.isidentifier():
         return strpped_word
@@ -49,6 +49,7 @@ def parse_list(list_str: str):
     return elements
 
 
+# Return the function name, input variables, and output variables
 def get_function_attributes(expr: str, definition=False) -> None:
     expr = expr.strip()
     if expr == "":
@@ -86,6 +87,7 @@ def get_function_attributes(expr: str, definition=False) -> None:
         return func_name, input_vars, output_vars
 
 
+# Tag the function attributes of a Matlab function file
 def tag_func(func_dir: str, prefix=""):
     try:
         with open(func_dir, "r") as file:
@@ -96,19 +98,21 @@ def tag_func(func_dir: str, prefix=""):
 
     # ignore the comments enclosed in %{ ... }%
     file_contents = remove_cmt_paragraph(file_contents)
+    if file_contents == "":
+        warnings.warn("No function is found in {}".format(func_dir))
+        return [""] * 3
+
     # process the keyword 'function'
     for line in generate_valid_code_line(file_contents):
-        if file_contents == "":
-            warnings.warn("No function is found in {}".format(func_dir))
-            return None, None, None
         attrs = get_function_attributes(line, definition=True)
-        if attrs is not None:
+        if attrs:
             func_name, input_vars, output_vars = attrs
             if prefix != "":
                 func_name = prefix + "/" + func_name
+
             return func_name, input_vars, output_vars
 
-    return None, None, None
+    return [""] * 3
 
 
 if __name__ == "__main__":
@@ -119,7 +123,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--codedir", required=True, help="Path to the code directory")
     parser.add_argument(
-        "--subdir", required=False, action="append", help="Path to the code directory"
+        "--subdir",
+        required=False,
+        action="append",
+        default=[],
+        help="Path to the code directory",
     )
     parser.add_argument(
         "--outdir", required=True, help="Path to store the output json analysis file"
@@ -130,31 +138,30 @@ if __name__ == "__main__":
     subdir = args.subdir
     out_dir = args.outdir
 
+    subdir.append(".")  # add current directory
+
     function_attributes = {}
-    for file_dir in os.listdir(code_dir):
-        if file_dir.endswith(".m"):
-            print("processing file: ", file_dir)
-            func_name, input_vars, output_vars = tag_func(
-                os.path.join(code_dir, file_dir)
-            )
-            if func_name is None:
+
+    for sub_folder in subdir:
+        for file_dir in os.listdir(os.path.join(code_dir, sub_folder)):
+            if not file_dir.endswith(".m"):
+                continue
+
+            if sub_folder == ".":
+                cur_file = os.path.join(code_dir, file_dir)
+                prefix = ""
+                print("processing file: ", cur_file)
+            else:
+                print("processing file in subfolder: ", sub_folder + "/" + file_dir)
+                cur_file = os.path.join(code_dir, sub_folder, file_dir)
+                prefix = sub_folder
+
+            func_name, input_vars, output_vars = tag_func(cur_file, prefix=prefix)
+            if not func_name:
                 continue
             func_attr = {func_name: {"input": input_vars, "output": output_vars}}
             function_attributes = {**function_attributes, **func_attr}
             print("done =====\n")
-
-    for sub_folder in subdir:
-        for file_dir in os.listdir(os.path.join(code_dir, sub_folder)):
-            if file_dir.endswith(".m"):
-                print("processing file in subfolder: ", sub_folder + "/" + file_dir)
-                func_name, input_vars, output_vars = tag_func(
-                    os.path.join(code_dir, sub_folder, file_dir), prefix=sub_folder
-                )
-                if func_name is None:
-                    continue
-                func_attr = {func_name: {"input": input_vars, "output": output_vars}}
-                function_attributes = {**function_attributes, **func_attr}
-                print("done =====\n")
 
     with open(out_dir, "w") as outfile:
         json.dump(function_attributes, outfile, indent=4)
