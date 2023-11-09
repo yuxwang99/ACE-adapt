@@ -1,6 +1,6 @@
 from parse import parse
 import warnings
-from utils.line import (
+from utils.parser.line import (
     generate_valid_code_line,
     remove_cmt_paragraph,
     remove_cmt_in_line,

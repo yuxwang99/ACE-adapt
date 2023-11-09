@@ -2,13 +2,13 @@
 # - Parse the Matlab code and generate the variable usage table for analysis - - - - - -#
 import re
 from function_tag import get_function_attributes
-from utils.line import (
+from utils.parser.line import (
     remove_cmt_in_line,
     remove_empty_space_before_line,
     skip_line,
     merge_line,
 )
-from utils.parse_expr import (
+from utils.parser.parse_expr import (
     map_variable,
     parse_base_expr,
     parse_FunctionAST,
@@ -20,7 +20,7 @@ from utils.parse_expr import (
     generate_new_var,
 )
 
-from utils.expr_class import (
+from utils.parser.expr_class import (
     BlockAST,
     ExprAST,
     VariableExprAST,
@@ -28,6 +28,8 @@ from utils.expr_class import (
     BinaryExprAST,
     CallExprAST,
 )
+
+CONTROL_CLAUSE = ["for", "while", "if", "elseif", "else", "switch", "case", "try"]
 
 
 def initialize_var_table(reserve_word: list[str]):
@@ -39,12 +41,35 @@ def initialize_var_table(reserve_word: list[str]):
                 var, "#" + str(ind), varAttr=1, production=ExprAST()
             )
             var_list.append(var_dict[var])
-    else:
-        var_dict[reserve_word] = VariableExprAST(
-            reserve_word, "#0", varAttr=1, production=ExprAST()
-        )
-        var_list.append(var_dict[reserve_word])
+
     return var_dict, var_list
+
+
+def parse_ctrl_clause(
+    expr: str,
+    variable_list=[],
+    table_vars: dict = {},
+    cur_block: BlockAST = BlockAST(),
+):
+    # whether For loop
+    if expr.startswith("for"):
+        return parse_ForLoopAST(expr, variable_list, table_vars, cur_block)
+
+    # whether While loop
+    if expr.startswith("while"):
+        return parse_WhileLoopAST(expr, variable_list, table_vars, cur_block)
+
+    # whether switch case
+    if expr.startswith("switch") or expr.startswith("case"):
+        return parse_SwitchExprAST(expr, variable_list, table_vars, cur_block)
+
+    # whether If expression
+    if expr.startswith("if") or expr.startswith("elseif") or expr.startswith("else"):
+        return parse_IfExprAST(expr, variable_list, table_vars, cur_block)
+
+    # whether try expression
+    if expr.startswith("try") or expr.startswith("catch"):
+        return parse_TryExprAST(expr, variable_list, table_vars, cur_block)
 
 
 def parse_primary_expr(
@@ -68,25 +93,28 @@ def parse_primary_expr(
     if attr:
         return parse_FunctionAST(attr, variable_list, table_vars, cur_block)
 
-    # whether For loop
-    if expr.startswith("for"):
-        return parse_ForLoopAST(expr, variable_list, table_vars, cur_block)
+    # try to parse the expression as a control clause
+    if expr.split(" ")[0] in CONTROL_CLAUSE or expr.split("(")[0] in CONTROL_CLAUSE:
+        return parse_ctrl_clause(expr, variable_list, table_vars, cur_block)
+    # # whether For loop
+    # if expr.startswith("for"):
+    #     return parse_ForLoopAST(expr, variable_list, table_vars, cur_block)
 
-    # whether While loop
-    if expr.startswith("while"):
-        return parse_WhileLoopAST(expr, variable_list, table_vars, cur_block)
+    # # whether While loop
+    # if expr.startswith("while"):
+    #     return parse_WhileLoopAST(expr, variable_list, table_vars, cur_block)
 
-    # whether switch case
-    if expr.startswith("switch") or expr.startswith("case"):
-        return parse_SwitchExprAST(expr, variable_list, table_vars, cur_block)
+    # # whether switch case
+    # if expr.startswith("switch") or expr.startswith("case"):
+    #     return parse_SwitchExprAST(expr, variable_list, table_vars, cur_block)
 
-    # whether If expression
-    if expr.startswith("if") or expr.startswith("elseif") or expr.startswith("else"):
-        return parse_IfExprAST(expr, variable_list, table_vars, cur_block)
+    # # whether If expression
+    # if expr.startswith("if") or expr.startswith("elseif") or expr.startswith("else"):
+    #     return parse_IfExprAST(expr, variable_list, table_vars, cur_block)
 
-    # whether try expression
-    if expr.startswith("try") or expr.startswith("catch"):
-        return parse_TryExprAST(expr, variable_list, table_vars, cur_block)
+    # # whether try expression
+    # if expr.startswith("try") or expr.startswith("catch"):
+    #     return parse_TryExprAST(expr, variable_list, table_vars, cur_block)
 
     # parse binary expression by default
     # RE split "=" for assignment but not split "==", ">=" , "<=" and "~="
@@ -178,7 +206,7 @@ def analyze_var_usage(
         line = merge_line(remove_cmt_in_line(line), pre_lines, empty_chars)
         cond_line_ind = []
 
-        cur_block = AST_nodes[-1] if len(AST_nodes) else BlockAST()
+        cur_block = AST_nodes[-1] if len(AST_nodes) else BlockAST([])
 
         if line.strip() == "end":
             top_node = AST_nodes[-1]
@@ -215,28 +243,3 @@ def analyze_var_usage(
     if len(AST_nodes) > 0 and (AST_nodes[-1] not in top_var_list):
         top_var_list[AST_nodes[-1]] = variable_list
     return top_var_list, top_expr
-
-
-# var_list, expr_list = analyze_var_usage(
-#     "../src_paper/src/pan_tompkin_algorithm_segmented.m"
-# )
-if __name__ == "__main__":
-    import os
-
-    code_dir = "../src_paper/src"
-    for file_dir in os.listdir(code_dir):
-        if file_dir.endswith(".m"):
-            if (
-                file_dir
-                == "additional_fill_in_FeaturesData_Train_Test.m"
-                # or file_dir == "fill_in_FeaturesData_Train_Test.m"
-            ):
-                continue
-            if (
-                "feature" in file_dir
-                or "Feature" in file_dir
-                or "Lorenz" in file_dir
-                or "calc" in file_dir
-            ):
-                print("processing file: ", file_dir)
-                analyze_var_usage(os.path.join(code_dir, file_dir))

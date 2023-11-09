@@ -1,7 +1,7 @@
 # - parse_expr.py - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 # - Provide support functions that parse the matlab expression into AST - - - - - - - - #
-from utils.expr_class import *
-import re
+from utils.parser.expr_class import *
+
 
 # Matlab operators
 BINARY_OPERATORS = [
@@ -32,7 +32,7 @@ SINGLE_OPERATORS = [
     "~",
     "'",
     ",'",
-    ":",  # consider slice operator : a special binary operator
+    ":",  # consider slice operator : a special single operator
     ",",
 ]
 OPERATORS = SINGLE_OPERATORS + BINARY_OPERATORS
@@ -117,12 +117,12 @@ def parse_base_expr(expr: str, table_vars={}, var_notation=0, lhs=False):
         return parse_nested_expr(expr, table_vars, var_notation, lhs)
 
     if any(op in expr for op in OPERATORS):
-        return parse_basic_computation(expr, table_vars, lhs)
+        return parse_basic_computation(expr, table_vars)
 
     raise ValueError(f"Cannot parse the expression '{expr}'")
 
 
-def parse_basic_computation(expr: str, table_vars={}, lhs=False):
+def parse_basic_computation(expr: str, table_vars={}):
     """
     Parse the math computation into binary expression, including the binary operator,
     struct operator, etc.
@@ -155,7 +155,7 @@ def parse_basic_computation(expr: str, table_vars={}, lhs=False):
             continue
 
         if (ch in OPERATORS) or (expr[ind : ind + 2] in BINARY_OPERATORS):
-            left_op = parse_base_expr(cur_token, table_vars, lhs)
+            left_op = parse_base_expr(cur_token, table_vars, lhs=False)
             if isinstance(left_op, VariableExprAST):
                 if ch != ".":  # struct operator
                     left_op = table_vars[left_op.var_name]
@@ -164,10 +164,10 @@ def parse_basic_computation(expr: str, table_vars={}, lhs=False):
 
             # first consider combined operators like .*
             if expr[ind : ind + 2] in OPERATORS:
-                right_op = parse_base_expr(expr[ind + 2 :], table_vars, lhs)
+                right_op = parse_base_expr(expr[ind + 2 :], table_vars, lhs=False)
                 op = expr[ind : ind + 2]
             else:
-                right_op = parse_base_expr(expr[ind + 1 :], table_vars, lhs)
+                right_op = parse_base_expr(expr[ind + 1 :], table_vars, lhs=False)
                 op = ch
 
             if isinstance(right_op, VariableExprAST):
@@ -232,7 +232,7 @@ def parse_nested_expr(nest_expr: str, table_vars={}, var_notation=0, lhs=False):
 
     pre_word = ""
     pos_bracket = []
-    # type_bracket includes {"()", "[]"}, non-detected parenthesis type at first
+    # type_bracket includes {"()", "[]", "{}"}, non-detected parenthesis type at first
     type_bracket = ["  "]
 
     pre_paren_type = type_bracket[-1]
@@ -254,7 +254,7 @@ def parse_nested_expr(nest_expr: str, table_vars={}, var_notation=0, lhs=False):
             if pre_word != pre_paren_type[1] and pre_word != "":
                 expr_stack.append(pre_word)
 
-            if char == "(" or char == "[" or char == "{":
+            if char in ["(", "[", "{"]:
                 pos_bracket.append(len(expr_stack))
                 if char == "(":
                     cur_paren_type = "()"

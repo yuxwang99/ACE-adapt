@@ -2,10 +2,10 @@
 # - Parse the Matlab code and analyze the sub-function call pattern - - - - - - - - - - #
 import os
 import re
-from utils.line import generate_valid_code_line
+from utils.parser.line import generate_valid_code_line
 from utils.visualization import call_graph_viz
-from utils.parse_expr import parse_nested_expr
-from utils.expr_class import CallExprAST
+from utils.parser.parse_expr import parse_nested_expr
+from utils.parser.expr_class import CallExprAST
 from function_tag import remove_cmt_paragraph
 
 
