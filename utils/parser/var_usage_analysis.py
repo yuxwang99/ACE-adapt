@@ -72,6 +72,14 @@ def parse_ctrl_clause(
         return parse_TryExprAST(expr, variable_list, table_vars, cur_block)
 
 
+def produce_lhs_expr():
+    pass
+
+
+def connect_rhs_expr():
+    pass
+
+
 def parse_primary_expr(
     expr: str,
     line_ind: int,
@@ -96,25 +104,6 @@ def parse_primary_expr(
     # try to parse the expression as a control clause
     if expr.split(" ")[0] in CONTROL_CLAUSE or expr.split("(")[0] in CONTROL_CLAUSE:
         return parse_ctrl_clause(expr, variable_list, table_vars, cur_block)
-    # # whether For loop
-    # if expr.startswith("for"):
-    #     return parse_ForLoopAST(expr, variable_list, table_vars, cur_block)
-
-    # # whether While loop
-    # if expr.startswith("while"):
-    #     return parse_WhileLoopAST(expr, variable_list, table_vars, cur_block)
-
-    # # whether switch case
-    # if expr.startswith("switch") or expr.startswith("case"):
-    #     return parse_SwitchExprAST(expr, variable_list, table_vars, cur_block)
-
-    # # whether If expression
-    # if expr.startswith("if") or expr.startswith("elseif") or expr.startswith("else"):
-    #     return parse_IfExprAST(expr, variable_list, table_vars, cur_block)
-
-    # # whether try expression
-    # if expr.startswith("try") or expr.startswith("catch"):
-    #     return parse_TryExprAST(expr, variable_list, table_vars, cur_block)
 
     # parse binary expression by default
     # RE split "=" for assignment but not split "==", ">=" , "<=" and "~="

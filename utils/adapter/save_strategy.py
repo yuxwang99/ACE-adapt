@@ -1,5 +1,5 @@
 import os
-from var_usage_analysis import analyze_var_usage
+from utils.parser.var_usage_analysis import analyze_var_usage
 from utils.parser.expr_class import CallExprAST, VariableExprAST, SliceExprAST
 from function_call_analysis import is_sub_func_called
 from utils.adapter.gen_matlab_save_code import is_mask_related_func

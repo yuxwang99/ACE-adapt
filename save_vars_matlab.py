@@ -1,7 +1,7 @@
 # - save_vars_matlab.py - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 # - Generate matlab variable save and load code - - - - - - - - - - - - - - - - - - - - #
 import os
-from var_usage_analysis import analyze_var_usage
+from utils.parser.var_usage_analysis import analyze_var_usage
 from utils.adapter.save_strategy import (
     is_once_called_func,
     select_non_loop_used_vars,
