@@ -216,6 +216,7 @@ class BinaryExprAST(ExprAST):
         self.op = op
         self.left_op = left_op
         self.right_op = right_op
+        self.args = [left_op, right_op]
 
         self._content = left_op.get_content() + op + right_op.get_content()
 

@@ -39,6 +39,7 @@ OPERATORS = SINGLE_OPERATORS + BINARY_OPERATORS
 
 
 def is_numeric(s):
+    """Deterimne whether the string expression is a numeric constant"""
     # exclude the special case of NAN
     if s.upper() == "NAN":
         return False
@@ -190,6 +191,17 @@ def parse_basic_computation(expr: str, table_vars={}):
 
 
 def parse_binary_expr(left_op, op, right_op, table_vars):
+    """Parse the binary expression
+
+    Args:
+        left_op (ExprAST or str): left oeprator
+        op (ExprAST): Expr AST of binary operator
+        right_op (ExprAST or str): right operator
+        table_vars (dict): Map table of variables in the current scope
+
+    Returns:
+        _type_: _description_
+    """
     if not isinstance(left_op, ExprAST):
         left_op = parse_base_expr(left_op, table_vars)
         if isinstance(left_op, VariableExprAST):
@@ -210,24 +222,8 @@ def parse_binary_expr(left_op, op, right_op, table_vars):
     return final_expr
 
 
-def parse_concat_expr(expr: str, table_vars={}):
-    """
-    Pass the Matlab supported concatenation expression, including the horizontal and
-    vertical concatenation.
-
-    Args:
-        expr (str): input string
-        table_vars (dict, optional): Table of variable of current scope. Defaults to {}.
-    """
-    # TODO: implemented before 30th Oct
-    expr = expr.strip("; ")
-    if expr.startswith("[") and expr.endswith("]"):
-        expr = expr[1:-1]
-    else:
-        raise ValueError(f"Cannot parse the concatenation expression '{expr}'.")
-
-
 def parse_nested_expr(nest_expr: str, table_vars={}, var_notation=0, lhs=False):
+    """Parse the nested expression, including the function call, slice expression, etc."""
     expr_stack = []
 
     pre_word = ""
@@ -242,6 +238,9 @@ def parse_nested_expr(nest_expr: str, table_vars={}, var_notation=0, lhs=False):
         # determine current parenthesis type
         cur_paren_type = type_bracket[-1]
 
+        # determine whether the current word is a valid lexeme:
+        # identifier, number, binary operator, and string.
+        # if yes, update the pre_word and continue
         if (pre_word + char).isidentifier():
             pre_word = pre_word + char
         elif is_numeric(pre_word + char):
@@ -250,10 +249,13 @@ def parse_nested_expr(nest_expr: str, table_vars={}, var_notation=0, lhs=False):
             pre_word = pre_word + char
         elif str_notation:
             pre_word = pre_word + char
-        elif char != " " or (cur_paren_type == "[]" and char == " "):
+
+        elif char != " " or (char == " " and cur_paren_type == "[]"):
+            # pre_word is a lexeme unit, push it to the stack
             if pre_word != pre_paren_type[1] and pre_word != "":
                 expr_stack.append(pre_word)
 
+            # open parenthesis: push the current parenthesis type to the stack
             if char in ["(", "[", "{"]:
                 pos_bracket.append(len(expr_stack))
                 if char == "(":
@@ -264,6 +266,8 @@ def parse_nested_expr(nest_expr: str, table_vars={}, var_notation=0, lhs=False):
                     cur_paren_type = "{}"
                 type_bracket.append(cur_paren_type)
 
+            # close parenthesis: parse the non-nested expression
+            # pop the current parenthesis type from the stack
             if char == cur_paren_type[1]:
                 expr = expr_stack[pos_bracket[-1] :] + [cur_paren_type[1]]
                 # parse the non-nested expression
@@ -281,7 +285,7 @@ def parse_nested_expr(nest_expr: str, table_vars={}, var_notation=0, lhs=False):
 
             pre_word = char
 
-        # determine whether is string
+        # determine whether is string by the quotation mark
         if char == '"' or (
             char == "'"
             and len(expr_stack) > 0
@@ -293,9 +297,10 @@ def parse_nested_expr(nest_expr: str, table_vars={}, var_notation=0, lhs=False):
         ):
             str_notation = not str_notation
 
-    if pre_word != ")" and pre_word != "}" and pre_word != "]" and pre_word != ";":
+    if not pre_word in [")", "}", "]", ";"]:
         expr_stack.append(pre_word)
 
+    # parse the final non-nested expression
     final_call = get_args_from_lexical(expr_stack, table_vars, lhs=lhs)
     return final_call[0]
 

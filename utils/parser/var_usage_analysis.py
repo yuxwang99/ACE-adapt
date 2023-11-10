@@ -51,6 +51,17 @@ def parse_ctrl_clause(
     table_vars: dict = {},
     cur_block: BlockAST = BlockAST(),
 ):
+    """Parse the control clause
+
+    Args:
+        expr (str): string expression of the control clause
+        variable_list (list, optional): variable list of current scope. Defaults to [].
+        table_vars (dict, optional): variable map of current scope. Defaults to {}.
+        cur_block (BlockAST, optional): current block the code attached. Defaults to BlockAST().
+
+    Returns:
+        parse result of the control clause respecitvely
+    """
     # whether For loop
     if expr.startswith("for"):
         return parse_ForLoopAST(expr, variable_list, table_vars, cur_block)
@@ -72,12 +83,70 @@ def parse_ctrl_clause(
         return parse_TryExprAST(expr, variable_list, table_vars, cur_block)
 
 
-def produce_lhs_expr():
-    pass
+def produce_lhs_expr(lhs, line_ind, variable_list, table_vars, cur_block, rhs):
+    """Generate the left hand side expression, and assign the production of the
+    rhs to each VariableAST in lhs
+
+    Args:
+        lhs (exprAST): expression of the left hand side.
+        line_ind (int): index of the line of the expression.
+        variable_list (list): list of variable of in scope.
+        table_vars (dict): table of variable of current scope.
+        cur_block (BlockAST): current block the AST is attached to.
+        rhs (exprAST): right hand side expression of the assignment
+
+    Returns:
+        lhs(exprAST)
+        variable_list (list): updated list of variable of in scope with lhs
+        table_vars (dict):updated  table of variable of current scope with lhs
+    """
+    if isinstance(lhs, ConcatExprAST):
+        # if lhs is a list of variables, add them to the variable list
+        for var in lhs.value:
+            if not isinstance(var, VariableExprAST):
+                continue
+            var, table_vars = generate_new_var(
+                var, line_ind, table_vars, cur_block, rhs, "#" + str(len(variable_list))
+            )
+            table_vars[var.var_name] = var
+            variable_list.append(var)
+    elif isinstance(lhs, BinaryExprAST) and lhs.op == ".":
+        # if lhs is a struct, the parser return it as a binary expression
+        # the left operation is the struct name, the right operation is the field name
+        var = lhs.left_op
+        var, table_vars = generate_new_var(
+            var, line_ind, table_vars, cur_block, rhs, "#" + str(len(variable_list))
+        )
+        table_vars[var.var_name] = var
+        variable_list.append(var)
+    else:
+        lhs, table_vars = generate_new_var(
+            lhs, line_ind, table_vars, cur_block, rhs, "#" + str(len(variable_list))
+        )
+        table_vars[lhs.var_name] = lhs
+        variable_list.append(lhs)
+
+    return lhs, variable_list, table_vars
 
 
-def connect_rhs_expr():
-    pass
+def connect_rhs_expr(var_expr, lhs, table_vars):
+    """add the lhs variable to the rhs variable usage
+
+    Args:
+        var_expr (_type_): _description_
+        lhs (_type_): _description_
+        table_vars (_type_): _description_
+    """
+    if isinstance(var_expr, VariableExprAST):
+        var_expr.mark_parent_AST(lhs)
+
+    if (
+        isinstance(var_expr, CallExprAST)
+        or isinstance(var_expr, ConcatExprAST)
+        or isinstance(var_expr, BinaryExprAST)
+    ):
+        for arg in var_expr.args:
+            connect_rhs_expr(arg, lhs, table_vars)
 
 
 def parse_primary_expr(
@@ -105,54 +174,26 @@ def parse_primary_expr(
     if expr.split(" ")[0] in CONTROL_CLAUSE or expr.split("(")[0] in CONTROL_CLAUSE:
         return parse_ctrl_clause(expr, variable_list, table_vars, cur_block)
 
-    # parse binary expression by default
     # RE split "=" for assignment but not split "==", ">=" , "<=" and "~="
     result = re.split(r"(?<=[^<>=~])=(?![<>=~])", expr)
 
-    # If it is a statement without "=", return empty expression to notate no assignment
+    # If it is a statement without "=", return root expression to notate no assignment
     if len(result) < 2:
         return ExprAST(expr), variable_list, table_vars
+
+    # parse the left and right hand side of the expression
     lhs_content, rhs_content = result[0], result[1]
     rhs = parse_base_expr(rhs_content, table_vars, lhs=False)
     lhs = parse_base_expr(lhs_content, table_vars, len(variable_list), lhs=True)
 
-    if isinstance(lhs, ConcatExprAST):
-        # if lhs is a list of variables, add them to the variable list
-        for var in lhs.value:
-            if not isinstance(var, VariableExprAST):
-                continue
-            var, table_vars = generate_new_var(
-                var, line_ind, table_vars, cur_block, rhs, "#" + str(len(variable_list))
-            )
-            table_vars[var.var_name] = var
-            variable_list.append(var)
-    elif isinstance(lhs, BinaryExprAST) and lhs.op == ".":
-        # if lhs is a struct, the parser return it as a binary expression
-        # the left operation is the struct name, the right operation is the field name
-        var = lhs.left_op
-        var, table_vars = generate_new_var(
-            var, line_ind, table_vars, cur_block, rhs, "#" + str(len(variable_list))
-        )
-        table_vars[var.var_name] = var
-        variable_list.append(var)
-    else:
-        lhs, table_vars = generate_new_var(
-            lhs, line_ind, table_vars, cur_block, rhs, "#" + str(len(variable_list))
-        )
-        table_vars[lhs.var_name] = lhs
-        variable_list.append(lhs)
-
     if isinstance(rhs, VariableExprAST):
         rhs = map_variable(rhs, table_vars)
-        rhs.mark_parent_AST(lhs)
 
-    if isinstance(rhs, CallExprAST) or isinstance(rhs, ConcatExprAST):
-        # mark args as parent AST
-        # TODO: recursively track the parent AST until it reaches the variable
-        for arg in rhs.args:
-            if isinstance(arg, VariableExprAST):
-                arg = map_variable(arg, table_vars)
-                arg.mark_parent_AST(lhs)
+    lhs, variable_list, table_vars = produce_lhs_expr(
+        lhs, line_ind, variable_list, table_vars, cur_block, rhs
+    )
+
+    connect_rhs_expr(rhs, lhs, table_vars)
 
     return lhs, variable_list, table_vars
 
@@ -208,8 +249,6 @@ def analyze_var_usage(
                 table_vars = {}
             continue
 
-        if ind == 9:
-            pass
         AST, variable_list, table_vars = parse_primary_expr(
             line, ind, variable_list, table_vars, cur_block
         )
