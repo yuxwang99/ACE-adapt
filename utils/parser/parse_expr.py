@@ -195,7 +195,7 @@ def parse_binary_expr(left_op, op, right_op, table_vars):
 
     Args:
         left_op (ExprAST or str): left oeprator
-        op (ExprAST): Expr AST of binary operator
+        op (str): binary operator string
         right_op (ExprAST or str): right operator
         table_vars (dict): Map table of variables in the current scope
 
@@ -323,7 +323,6 @@ def get_args_from_lexical(lex_list: list, table_vars={}, var_list=[], lhs=False)
         if skip_flag:
             skip_flag = False
             continue
-
         if (
             isinstance(lex, str)
             and ind < len(lex_list) - 1
@@ -341,16 +340,27 @@ def get_args_from_lexical(lex_list: list, table_vars={}, var_list=[], lhs=False)
             args.append(arg)
             skip_flag = True
         elif isinstance(lex, str) and (lex in BINARY_OPERATORS):
-            # combine the binary operation to the latter argument
-            arg = parse_binary_expr(
-                args[-1],
-                lex,
-                get_args_from_lexical(lex_list[ind + 1 : ind + 2])[0],
-                table_vars,
-            )
-            args.pop()
-            args.append(arg)
-            skip_flag = True
+            # if a negative sign
+            if len(args) < 1 and lex == "-":
+                arg = parse_binary_expr(
+                    NumberExprAST("0"),
+                    "-",
+                    get_args_from_lexical(lex_list[ind + 1 : ind + 2])[0],
+                    table_vars,
+                )
+                args.append(arg)
+                skip_flag = True
+            else:
+                # combine the binary operation to the latter argument
+                arg = parse_binary_expr(
+                    args[-1],
+                    lex,
+                    get_args_from_lexical(lex_list[ind + 1 : ind + 2])[0],
+                    table_vars,
+                )
+                args.pop()
+                args.append(arg)
+                skip_flag = True
         elif isinstance(lex, list):
             # if is a list, consider combining with the previous lexis
             if len(args) < 1:

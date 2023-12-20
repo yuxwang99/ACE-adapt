@@ -149,15 +149,13 @@ class ConcatExprAST(ExprAST):
     Class to represent the concatenate expression in "[]".
     """
 
-    def __init__(self, value=[]):
+    def __init__(self, args=[]):
         super().__init__()
-        self.value = value
-        self._content = value
-        self.args = []
+        self.args = args
 
     def get_content(self):
         str_content = ""
-        for c in self._content:
+        for c in self.args:
             if isinstance(c, ExprAST):
                 str_content += ", " + c.get_content()
             else:

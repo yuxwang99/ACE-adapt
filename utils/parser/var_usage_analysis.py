@@ -102,7 +102,7 @@ def produce_lhs_expr(lhs, line_ind, variable_list, table_vars, cur_block, rhs):
     """
     if isinstance(lhs, ConcatExprAST):
         # if lhs is a list of variables, add them to the variable list
-        for var in lhs.value:
+        for var in lhs.args:
             if not isinstance(var, VariableExprAST):
                 continue
             var, table_vars = generate_new_var(
@@ -218,7 +218,7 @@ def analyze_var_usage(
     top_expr = []
 
     # create variable tables to record the variable usage
-    table_vars, variable_list = initialize_var_table(["nargin", "pi"])
+    table_vars, variable_list = initialize_var_table(["nargin", "pi", "exp"])
     for [ind, line] in enumerate(code_line):
         # skip the comment line
         line_state = skip_line(line, line_state)

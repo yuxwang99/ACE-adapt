@@ -22,25 +22,26 @@ class VarSave_EmotionalClassification(VariableSaveStrategy):
             self.folder,
             self.rootfile + ".m",
             self.call_pattern,
-            ["extractFeat_Yuxuan"],
+            [self.rootfile],
             reuse_func_list=[],
             sub_folders=self.subfolders,
         )
 
-        self.process_func = set(process_func_list) - set(reuse_func_list)
+        self.process_func = process_func_list
 
-    def process_examined_subfuncs(self):
+    def process_examined_subfuncs(self, system_func_list=[]):
         for func in self.process_func:
-            save_var_list = self.select_save_vars(func)
+            # save variables computed by the system function which takes on large overhead
+            save_var_list = self.select_save_vars(func, system_func_list)
             self.generate_save_code(func, save_var_list)
 
-    def select_save_vars(self, func):
+    def select_save_vars(self, func, system_func_list):
         print("====", func)
-        var_list, _ = analyze_var_usage(os.path.join(self.folder, func + ".m"))
+        block, _ = analyze_var_usage(os.path.join(self.folder, func + ".m"))
 
         save_var_list = select_non_loop_used_vars(
-            var_list,
-            valid_save_func=self.process_func,
+            block,
+            valid_save_func=self.process_func + system_func_list,
             sub_folders=sub_folders,
         )
         return save_var_list
@@ -65,31 +66,37 @@ if __name__ == "__main__":
     import os
     import json
 
-    # experiment 1: INCLASS
-    # call_pattern = "./function_call_pattern.json"
-    # with open(call_pattern, "r") as file:
-    #     call_pattern = json.load(file)
-    # func_call = "../src_paper/src/my_Extract_features_Jep.m"
-    # process_func_list = is_once_called_func(
-    #     func_call, call_pattern, ["my_Extract_features_Jep"]
-    # )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--codedir", required=True, help="Path to the code directory")
+    parser.add_argument(
+        "--newcodedir", required=True, help="Path to the new code directory"
+    )
+    parser.add_argument(
+        "--rootfunc", required=True, help="Function name of the root file"
+    )
+    parser.add_argument(
+        "--callpat", required=True, help="Json file of the call pattern"
+    )
+    parser.add_argument(
+        "--subfolder",
+        required=False,
+        default=[],
+        action="append",
+        help="Relative path to the sub folders in the code directory",
+    )
+    args = parser.parse_args()
+    code_dir = args.codedir
+    new_code_dir = args.newcodedir
+    sub_folders = args.subfolder
+    func_call = args.rootfunc
+    callpat = args.callpat
 
-    # code_dir = "../src_paper/src"
-    # new_code_dir = "../src_paper/src_new"
-
-    # experiment 2: PassengeOfTime
-    code_dir = "../../PassageOfTimeDataAnalysis/Pipeline_Yuxuan"
-    new_code_dir = "../../PassageOfTimeDataAnalysis/Pipeline_Yuxuan_new"
-
-    call_pattern = "./function_call_pattern.json"
-    with open(call_pattern, "r") as file:
+    with open(callpat, "r") as file:
         call_pattern = json.load(file)
-    func_call = "extractFeat_Yuxuan"
-    sub_folders = ["Feature_scripts", "Signals_scripts"]
 
     # create the new folder
     if os.path.isdir(new_code_dir):
-        os.system("rm -r {}".format(new_code_dir))
+        os.system("rm -rf {}".format(new_code_dir))
 
     os.system("mkdir {}".format(new_code_dir))
 
@@ -118,4 +125,4 @@ if __name__ == "__main__":
         code_dir, func_call, sub_folders, call_pattern
     )
     strategy.select_examine_subfuncs()
-    strategy.process_examined_subfuncs()
+    strategy.process_examined_subfuncs(["plomb"])
