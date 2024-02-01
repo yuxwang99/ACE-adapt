@@ -88,6 +88,20 @@ def is_once_called_func(
     return parent_func, reuse_func_list
 
 
+def in_use_variable(var, var_list):
+    if len(var.usage) != 0:
+        return True
+
+    # detect whether brother variables is in use
+    for var1 in var_list:
+        set1 = set(var1.production.values())
+        set2 = set(var.production.values())
+        if bool(set1.intersection(set2)):
+            if len(var1.usage) != 0:
+                return True
+    return False
+
+
 def select_non_loop_used_vars(
     block_expr,
     valid_save_func: list,
@@ -104,13 +118,12 @@ def select_non_loop_used_vars(
             if var._varAttr == 1:
                 continue
             # Exclude variables that are not used
-            if len(var.usage) == 0:
+            if not in_use_variable(var, var_list):
                 continue
             # Exclude variables in the loop
             if var.in_loop:
                 continue
             for slice, expr in var.production.items():
-                # Exclude variables that are generated w.r.t the masks
                 if isinstance(expr, CallExprAST) and is_sub_func_called(
                     expr.func_name, valid_save_func, sub_folders
                 ):
@@ -131,8 +144,8 @@ def select_top_level_used_vars(
     save_var_list = []
 
     for block, var_list in block_expr.items():
-        # Exclude variables that are used in the slice expression
         for var in var_list:
+            # Exclude variables that are used in the slice expression
             if isinstance(var, SliceExprAST):
                 continue
             # Exclude the input variables
@@ -147,10 +160,10 @@ def select_top_level_used_vars(
             if var.in_loop:
                 continue
             for slice, expr in var.production.items():
-                # Exclude variables that are generated w.r.t the masks
                 if isinstance(expr, CallExprAST) and is_sub_func_called(
                     expr.func_name, valid_save_func, sub_folders
                 ):
+                    # Exclude variables that are generated w.r.t the masks
                     if is_mask_related_func(expr):
                         continue
                     print("save var: ", var.var_name)

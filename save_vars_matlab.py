@@ -2,6 +2,7 @@
 # - Generate matlab variable save and load code - - - - - - - - - - - - - - - - - - - - #
 import os
 from utils.parser.var_usage_analysis import analyze_var_usage
+from utils.parser.expr_class import FunctionAST
 from utils.adapter.save_strategy import (
     is_once_called_func,
     select_non_loop_used_vars,
@@ -30,10 +31,39 @@ class VarSave_EmotionalClassification(VariableSaveStrategy):
         self.process_func = process_func_list
 
     def process_examined_subfuncs(self, system_func_list=[]):
+        full_save_var_list = []
         for func in self.process_func:
             # save variables computed by the system function which takes on large overhead
             save_var_list = self.select_save_vars(func, system_func_list)
+            full_save_var_list.extend(save_var_list)
+
             self.generate_save_code(func, save_var_list)
+
+        # generate init globals file
+        self.init_globals(full_save_var_list)
+
+    def init_globals(self, var_list):
+        num_vars = len(var_list)
+        init_matlab_code = f"global ctrl_vec;\n\n"
+        index_var_code = "function ind = get_var_index(var_name)\nind=0;\n"
+        for ind, var in enumerate(var_list):
+            init_matlab_code = init_matlab_code + "global " + var.var_name + ";\n"
+
+            index_var_code = (
+                index_var_code
+                + f"if (strcmp(var_name, '{var.var_name}'))\n  ind={ind+1};\nend\n"
+            )
+
+        # write the code into init_globals.m
+        gen_code = open(os.path.join(new_code_dir, "init_globals.m"), "wt")
+        gen_code.write(init_matlab_code)
+        gen_code.close()
+
+        # generate the index of the variables for the control vector
+        index_var_code = index_var_code + "end\n"
+        gen_code = open(os.path.join(new_code_dir, "get_var_index.m"), "wt")
+        gen_code.write(index_var_code)
+        gen_code.close()
 
     def select_save_vars(self, func, system_func_list):
         print("====", func)
@@ -84,7 +114,21 @@ if __name__ == "__main__":
         action="append",
         help="Relative path to the sub folders in the code directory",
     )
-    args = parser.parse_args()
+
+    try:
+        args = parser.parse_args()
+    except:
+        args = argparse.Namespace()
+
+        json_configure = "config_pot.json"
+        with open(json_configure, "r") as json_file:
+            config_data = json.load(json_file)
+
+        # Merge config_data with args namespace
+        for key, value in config_data.items():
+            if not hasattr(args, key) or getattr(args, key) is None:
+                setattr(args, key, value)
+
     code_dir = args.codedir
     new_code_dir = args.newcodedir
     sub_folders = args.subfolder

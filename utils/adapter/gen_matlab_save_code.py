@@ -54,46 +54,66 @@ def generate_save_cmd(orig_code, proces_func, folder_dir, empty_chars=""):
     left_expr = orig_code.split("=")[0].strip()
     output_vars = parse_list(left_expr)
     save_cmd = ""
-    # detect whether the variable is saved in cache
-    var_file_name = ""
+
+    if_clause = ""
     for output_var in output_vars:
         if output_var == "~":
             continue
-        var_file_name += "_" + output_var
 
-    # determine whether file exists
-    save_cmd += empty_chars + "if isfile('{}')".format(
-        os.path.join(folder_dir, proces_func + var_file_name + ".mat")
-    )
+        if if_clause:
+            if_clause += " || "
 
-    # if exists, load the file
-    save_cmd += empty_chars + "\n    load('{}');\n".format(
-        os.path.join(folder_dir, proces_func + var_file_name + ".mat")
-    )
+        if_clause += f"ctrl_vec(get_var_index('{output_var}'))"
 
-    # otherwise, do the computation
-    save_cmd += empty_chars + "else\n"
-    save_cmd += "    " + orig_code + "\n"
+    save_cmd += f"if {if_clause}\n"
+    save_cmd += orig_code + "\n"
 
-    # further save the result
-    save_cmd += empty_chars + "    save('{}.mat', ...\n ".format(
-        os.path.join(folder_dir, proces_func + var_file_name)
-    )
-
+    # not allowed write anymore
     for output_var in output_vars:
-        save_cmd += empty_chars + "'{}', ".format(output_var)
+        if output_var == "~":
+            continue
 
-    save_cmd = save_cmd[:-2]  # remove the last comma
-    save_cmd += ");\n"
+        # if exists, load the file
+        # save_cmd += empty_chars + f"    {output_var}_g = {output_var};\n"
+        save_cmd += empty_chars + f"    ctrl_vec(get_var_index('{output_var}'))=0;\n"
+
+    # otherwise, read from the pre-computed
+    # save_cmd += empty_chars + "else\n"
+
+    # # further save the result
+    # save_cmd += (
+    #     empty_chars
+    #     + "    "
+    #     + "    save('{}.mat', ...\n ".format(
+    #         os.path.join(folder_dir, proces_func + var_file_name)
+    #     )
+    # )
+
+    # for output_var in output_vars:
+    #     if output_var == "~":
+    #         continue
+    #     save_cmd += empty_chars + f"    {output_var} = {output_var}_g;\n"
+
+    # save_cmd = save_cmd[:-2]  # remove the last comma
+    # save_cmd += ");\n"
     save_cmd += empty_chars + "end\n"
 
     return save_cmd
+
+
+def is_rewrite_line(lines, start_ind, rewrite_line):
+    """Determine whether the line needs to be rewritten"""
+    for [ind, line] in enumerate(lines):
+        if not line.endswith("..."):
+            return start_ind + ind in rewrite_line
+    return False
 
 
 def save_vars_in_matlab(
     file_dir: str,
     save_var_list: list,
     folder_dir: str = os.path.join(INCLASS_PATH, "cache_data"),
+    maximum_looklen=10,
 ):
     """
     Generate the variable save code in matlab
@@ -101,6 +121,7 @@ def save_vars_in_matlab(
     Args:
         file_name: the name of the file to process
         call_pattern: the function call pattern
+        maximum_looklen: maximum number of lines to look ahead
 
     Return:
         save_cmd: the command to save the variables and add save cmd after the function call
@@ -118,16 +139,26 @@ def save_vars_in_matlab(
     code_with_save = ""
     line_state = -1
     cond_line_ind = []
+    func_defined = False
     # file_contents = remove_cmt_paragraph(file_contents)
     func_name = file_dir.split("/")[-1][:-2]  # remove the .m
 
     rewrite_line = []
+    global_vars = []
     for var in save_var_list:
         rewrite_line.append(var._attr["line"])
+        global_vars.append(var.var_name)
 
     for [ind, line] in enumerate(code_line):
+        if func_defined:
+            code_with_save += "global ctrl_vec;\n"
+            global_declare = ["global " + item + ";" for item in global_vars]
+            code_with_save += "\n".join(global_declare)
+            func_defined = False
         # copy the original code
-        if ind not in rewrite_line:
+        if not is_rewrite_line(
+            code_line[ind : ind + maximum_looklen], ind, rewrite_line
+        ):
             code_with_save += line + "\n"
 
         # skip the comment line
@@ -145,6 +176,9 @@ def save_vars_in_matlab(
         pre_lines = [remove_cmt_in_line(code_line[i]) for i in cond_line_ind]
         line = merge_line(remove_cmt_in_line(line), pre_lines, empty_chars)
         cond_line_ind = []
+
+        if line.strip().startswith("function"):
+            func_defined = True
 
         if ind in rewrite_line:
             save_cmd = generate_save_cmd(line, func_name, folder_dir)
