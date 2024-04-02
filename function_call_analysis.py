@@ -245,40 +245,6 @@ def save_cnt_map(root_node: FunctionCall, json_map: dict):
     return json_map
 
 
-def compute_function_dependency(root, leaf_weights, weights_dict={}, total_feat=45):
-    """
-    Compute the function dependency based on the leaf weights, where the dependency in
-    each node is the superset of its child nodes.
-    """
-    import numpy as np
-
-    cur_node = root
-    func_name = cur_node.func_name.split("/")[-1]
-    if len(cur_node.child_nodes) == 0:
-        if func_name in leaf_weights.keys():
-            weights_dict[func_name] = np.array(leaf_weights[func_name]).astype(int)
-        else:
-            # Parse the function name to get the leaf node features by default
-            leaf_feat = func_name[len("Feat") :].split("_")
-            weights_dict[func_name] = np.zeros((total_feat,)).astype(int)
-            for feat in leaf_feat:
-                try:
-                    weights_dict[func_name][int(feat) - 1] = 1
-                except:
-                    raise ValueError(
-                        "Leaf node {} need specific features".format(func_name)
-                    )
-        return weights_dict
-
-    weights_dict[func_name] = np.zeros((total_feat,))
-    for node in root.child_nodes:
-        weights_dict = compute_function_dependency(node, leaf_weights, weights_dict)
-        weights_dict[func_name] = np.logical_or(
-            weights_dict[func_name], weights_dict[node.func_name.split("/")[-1]]
-        ).astype(int)
-    return weights_dict
-
-
 if __name__ == "__main__":
     import argparse
     import os
