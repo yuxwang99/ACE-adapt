@@ -2,16 +2,19 @@ from graphviz import Digraph
 from parse import parse
 
 
-def traverse_call_graph(node, graph):
+def traverse_call_graph(node, graph, simplify=True):
+    if simplify:
+        graph.node(node.func_name, shape="point")
+    else:
+        graph.node(node.func_name, node.func_name)
     for child in node.child_nodes:
-        graph.node(child.func_name, child.func_name)
-        graph.edge(node.func_name, child.func_name)
-        traverse_call_graph(child, graph)
+        graph.edge(node.func_name, child.func_name, arrowsize="0.3")
+        traverse_call_graph(child, graph, simplify=simplify)
 
 
 def call_graph_viz(root_node, graph_name="call_graph"):
     # Create a new Digraph object
     graph = Digraph(comment=graph_name)
-    traverse_call_graph(root_node, graph)
+    traverse_call_graph(root_node, graph, simplify=True)
     graph.save(graph_name + ".dot")
     graph.view()
