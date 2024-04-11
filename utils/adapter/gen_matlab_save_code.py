@@ -27,7 +27,7 @@ def is_mask_related_func(
     return False
 
 
-def generate_save_cmd(orig_code, proces_func, folder_dir, empty_chars=""):
+def generate_save_cmd(orig_code, empty_chars=""):
     """
     Generate the save command in matlab
 
@@ -44,11 +44,9 @@ def generate_save_cmd(orig_code, proces_func, folder_dir, empty_chars=""):
         orig_code = "y = user_f(x)"
 
         Return
-            if isfile('cache_data/user_f_y.mat')
-                load('cache_data/user_f_y.mat');
-            else
+            if ctrl_vec(get_var_index(y))
                 y = user_f(x);
-                save('cache_data/user_f_y.mat', 'y');
+                ctrl_vec(get_var_index(y)) = 0;
             end
     """
     left_expr = orig_code.split("=")[0].strip()
@@ -66,37 +64,16 @@ def generate_save_cmd(orig_code, proces_func, folder_dir, empty_chars=""):
         if_clause += f"ctrl_vec(get_var_index('{output_var}'))"
 
     save_cmd += f"if {if_clause}\n"
-    save_cmd += orig_code + "\n"
+    save_cmd += "    " + orig_code + "\n"
 
-    # not allowed write anymore
     for output_var in output_vars:
         if output_var == "~":
             continue
 
-        # if exists, load the file
-        # save_cmd += empty_chars + f"    {output_var}_g = {output_var};\n"
-        save_cmd += empty_chars + f"    ctrl_vec(get_var_index('{output_var}'))=0;\n"
+        # not allowed write anymore
+        save_cmd += f"    ctrl_vec(get_var_index('{output_var}'))=0;\n"
 
-    # otherwise, read from the pre-computed
-    # save_cmd += empty_chars + "else\n"
-
-    # # further save the result
-    # save_cmd += (
-    #     empty_chars
-    #     + "    "
-    #     + "    save('{}.mat', ...\n ".format(
-    #         os.path.join(folder_dir, proces_func + var_file_name)
-    #     )
-    # )
-
-    # for output_var in output_vars:
-    #     if output_var == "~":
-    #         continue
-    #     save_cmd += empty_chars + f"    {output_var} = {output_var}_g;\n"
-
-    # save_cmd = save_cmd[:-2]  # remove the last comma
-    # save_cmd += ");\n"
-    save_cmd += empty_chars + "end\n"
+    save_cmd += "end\n"
 
     return save_cmd
 
@@ -112,7 +89,6 @@ def is_rewrite_line(lines, start_ind, rewrite_line):
 def save_vars_in_matlab(
     file_dir: str,
     save_var_list: list,
-    folder_dir: str = os.path.join(INCLASS_PATH, "cache_data"),
     maximum_looklen=10,
 ):
     """
@@ -140,8 +116,6 @@ def save_vars_in_matlab(
     line_state = -1
     cond_line_ind = []
     func_defined = False
-    # file_contents = remove_cmt_paragraph(file_contents)
-    func_name = file_dir.split("/")[-1][:-2]  # remove the .m
 
     rewrite_line = []
     global_vars = []
@@ -154,6 +128,7 @@ def save_vars_in_matlab(
             code_with_save += "global ctrl_vec;\n"
             global_declare = ["global " + item + ";" for item in global_vars]
             code_with_save += "\n".join(global_declare)
+            code_with_save += "\n"
             func_defined = False
         # copy the original code
         if not is_rewrite_line(
@@ -181,7 +156,7 @@ def save_vars_in_matlab(
             func_defined = True
 
         if ind in rewrite_line:
-            save_cmd = generate_save_cmd(line, func_name, folder_dir)
+            save_cmd = generate_save_cmd(line, empty_chars)
             code_with_save += save_cmd
 
     return code_with_save

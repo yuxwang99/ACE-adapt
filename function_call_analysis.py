@@ -173,7 +173,6 @@ def call_analysis(
             f"The file '{os.path.join(root_dir, file_name)}' was not found."
         )
 
-    print("Processing file: ", file_name)
     # ignore the comments enclosed in %{ ... }%
     file_contents = remove_cmt_paragraph(file_contents)
 
@@ -209,9 +208,9 @@ def call_analysis(
     return function
 
 
-def save_cnt_map(root_node: FunctionCall, json_map: dict):
+def save_cnt_graph(root_node: FunctionCall, json_map: dict):
     """
-    Save the Function call tree to json format
+    Save the Function call graph to json format
 
     Args:
         root_node (FunctionCall): FunctionCall object of the root node
@@ -240,7 +239,7 @@ def save_cnt_map(root_node: FunctionCall, json_map: dict):
     json_map = {**json_map, **json_node}
 
     for child_node in root_node.child_nodes:
-        json_map = save_cnt_map(child_node, json_map)
+        json_map = save_cnt_graph(child_node, json_map)
 
     return json_map
 
@@ -252,7 +251,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--folder", required=True, help="Path to the analyze code directory"
+        "--codedir", required=True, help="Path to the analyze code directory"
     )
     parser.add_argument(
         "--subfolder",
@@ -277,7 +276,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     visualize = int(args.visualize)
-    folder = args.folder
+    folder = args.codedir
     json_tag = args.jsontag
     root_file = args.rootfile
     sub_func_folders = args.subfolder
@@ -287,14 +286,13 @@ if __name__ == "__main__":
     with open(json_tag, "r") as file:
         tag_data = json.load(file)
 
-    if root_file.endswith(".m"):
-        print("\nprocessing folder: ", folder)
-        root_node = call_analysis(
-            folder, root_file, tag_data, sub_func_folders=sub_func_folders
-        )
+    root_node = call_analysis(
+        folder, root_file + ".m", tag_data, sub_func_folders=sub_func_folders
+    )
+    print("Call graph generation done =====\n")
 
-        if visualize == 1:
-            call_graph_viz(root_node, "test1")
-        json_file = save_cnt_map(root_node, {})
-        with open(outdir, "w") as outfile:
-            json.dump(json_file, outfile, indent=4)
+    if visualize > 0:
+        call_graph_viz(root_node,visualize, "test1")
+    json_file = save_cnt_graph(root_node, {})
+    with open(outdir, "w") as outfile:
+        json.dump(json_file, outfile, indent=4)

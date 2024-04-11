@@ -12,9 +12,9 @@ def traverse_call_graph(node, graph, simplify=True):
         traverse_call_graph(child, graph, simplify=simplify)
 
 
-def call_graph_viz(root_node, graph_name="call_graph"):
+def call_graph_viz(root_node, visual_method, graph_name="call_graph"):
     # Create a new Digraph object
     graph = Digraph(comment=graph_name)
-    traverse_call_graph(root_node, graph, simplify=True)
+    traverse_call_graph(root_node, graph, visual_method==1)
     graph.save(graph_name + ".dot")
     graph.view()

@@ -76,13 +76,13 @@ class VarSave_EmotionalClassification(VariableSaveStrategy):
         )
         return save_var_list
 
-    def generate_save_code(self, func, save_var_list, relate_save_path="cache"):
+    def generate_save_code(self, func, save_var_list):
         """Generate the code to save the variables"""
         if len(save_var_list) == 0:
             return
 
         save_cmd = save_vars_in_matlab(
-            os.path.join(self.folder, func + ".m"), save_var_list, relate_save_path
+            os.path.join(self.folder, func + ".m"), save_var_list
         )
 
         # save the matlab code
@@ -105,7 +105,7 @@ if __name__ == "__main__":
         "--rootfunc", required=True, help="Function name of the root file"
     )
     parser.add_argument(
-        "--callpat", required=True, help="Json file of the call pattern"
+        "--callgraph", required=True, help="Json file of the call pattern"
     )
     parser.add_argument(
         "--subfolder",
@@ -115,28 +115,16 @@ if __name__ == "__main__":
         help="Relative path to the sub folders in the code directory",
     )
 
-    try:
-        args = parser.parse_args()
-    except:
-        args = argparse.Namespace()
-
-        json_configure = "config_pot.json"
-        with open(json_configure, "r") as json_file:
-            config_data = json.load(json_file)
-
-        # Merge config_data with args namespace
-        for key, value in config_data.items():
-            if not hasattr(args, key) or getattr(args, key) is None:
-                setattr(args, key, value)
+    args = parser.parse_args()
 
     code_dir = args.codedir
     new_code_dir = args.newcodedir
     sub_folders = args.subfolder
     func_call = args.rootfunc
-    callpat = args.callpat
+    callgraph = args.callgraph
 
-    with open(callpat, "r") as file:
-        call_pattern = json.load(file)
+    with open(callgraph, "r") as file:
+        call_graph = json.load(file)
 
     # create the new folder
     if os.path.isdir(new_code_dir):
@@ -166,7 +154,7 @@ if __name__ == "__main__":
             )
 
     strategy = VarSave_EmotionalClassification(
-        code_dir, func_call, sub_folders, call_pattern
+        code_dir, func_call, sub_folders, call_graph
     )
     strategy.select_examine_subfuncs()
     strategy.process_examined_subfuncs(["plomb"])

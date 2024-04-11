@@ -150,9 +150,7 @@ if __name__ == "__main__":
             if sub_folder == ".":
                 cur_file = os.path.join(code_dir, file_dir)
                 prefix = ""
-                print("processing file: ", cur_file)
             else:
-                print("processing file in subfolder: ", sub_folder + "/" + file_dir)
                 cur_file = os.path.join(code_dir, sub_folder, file_dir)
                 prefix = sub_folder
 
@@ -161,7 +159,7 @@ if __name__ == "__main__":
                 continue
             func_attr = {func_name: {"input": input_vars, "output": output_vars}}
             function_attributes = {**function_attributes, **func_attr}
-            print("done =====\n")
+    print("Tag user-define function done =====\n")
 
     with open(out_dir, "w") as outfile:
         json.dump(function_attributes, outfile, indent=4)
