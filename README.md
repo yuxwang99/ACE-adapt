@@ -36,8 +36,8 @@ Feel free to visualize the call graph in different ways specified by `--visualiz
 ### 3. Run `save_vars_matlab.py`
 Use `python save_vars_maltab.py` to generate .m file with variables saving code.
 
-Files in *code_dir* would be copied to new_code_dir if none of its internal variables are needed for other functions' computation analyzed by *pattern.json*. Otherwise, new Matlab scripts will be automatically generated from the original code. These new scripts will include additional logic for saving the required variables."
+Files would be copied to new_code_dir if none of its internal variables are needed for other functions. Otherwise, new Matlab scripts will be automatically generated from the original code. These new scripts will include additional logic for saving the required variables.
 
 ## Toy example
 Try runing 
-`sh sh_toy.sh` to play with the toy_example codebase with ACE-adapt. 
+`sh sh_toy.sh` to play with the toy_example codebase with ACE-adapt:)
