@@ -16,10 +16,10 @@ ACE automatically generates a new codebase that buffers data if it is possible t
 Use `python function_tag --codedir code_folder`
 to tag the inputs, outputs variable names and function names of the Matlab function script(.m) in *code_folder*, and generates a json file as output.
 
-We only edit user-define functions. Hence, we first tag user-define function declaration to get their names, inputs, and outputs to distinguish the same the user-define function invocation between matrix slice. The generated json file indicates the what function should be processed in the following steps.
+We only edit user-define functions. Hence, we first tag user-define function declaration to get their names, inputs, and outputs to distinguish the user-define function invocation between matrix slice. The generated json file indicates the what function would be processed in the following steps.
 
 ### 2. Run `function_call_analysis.py`
-Use `python function_call_analysis.py` to generate call graoh of the code base, which is saved in json format.
+Use `python function_call_analysis.py` to generate call graph of the code base, which is saved in json format.
 
 You need to specify 
 
@@ -28,7 +28,7 @@ You need to specify
 
 For more information please refer `python function_call_analysis -h`
 
-Feel free to visualize the call graph in different ways specified by `--visualize`
+Feel free to visualize the call graph in different ways using `--visualize`
 - `--visualize=0`: not visualize
 - `--visualize=1`: visualize in simplify mode (DAG).
 - `--visualize=2`: visualize function invocation with function name notated
@@ -40,4 +40,4 @@ Files would be copied to new_code_dir if none of its internal variables are need
 
 ## Toy example
 Try runing 
-`sh sh_toy.sh` to play with the toy_example codebase with ACE-adapt:)
+`sh sh_toy.sh` to play with the `toy_example` codebase with ACE-adapt or directly looking into the `toy_example_new` to see what is generated :)
